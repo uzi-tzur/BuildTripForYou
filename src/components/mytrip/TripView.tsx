@@ -686,7 +686,7 @@ function StopSummary({ label, stop }: { label: string; stop: DisplayStop }) {
   );
 }
 
-/** Low/high for one named place, opening a weather service for it on tap. */
+/** Daily low/high and precipitation chance for one named place. */
 function WeatherChip({
   name,
   weather,
@@ -707,9 +707,15 @@ function WeatherChip({
       <span>🌤️</span>
       <span className="font-semibold">{name}</span>
       {weather ? (
-        <span>
-          {celsiusToFahrenheit(weather.temperatureMinC ?? weather.temperatureC ?? 0)}°–
-          {celsiusToFahrenheit(weather.temperatureMaxC ?? weather.temperatureC ?? 0)}°F
+        <span className="inline-flex items-center gap-1">
+          <span>
+            L {celsiusToFahrenheit(weather.temperatureMinC ?? weather.temperatureC ?? 0)}° · H {celsiusToFahrenheit(
+              weather.temperatureMaxC ?? weather.temperatureC ?? 0,
+            )}°
+          </span>
+          <span className="text-slate-500">
+            · Precipitation {weather.precipitationChance == null ? "—" : `${weather.precipitationChance}%`}
+          </span>
         </span>
       ) : (
         <span className="text-slate-400">—</span>
