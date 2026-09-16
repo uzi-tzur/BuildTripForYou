@@ -702,23 +702,26 @@ function WeatherChip({
       target="_blank"
       rel="noreferrer"
       onClick={(e) => e.stopPropagation()}
-      className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-black/5 transition-colors hover:bg-brand-blue-50 hover:text-brand-blue-700"
+      className="flex items-start gap-1.5 rounded-xl bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-600 ring-1 ring-black/5 transition-colors hover:bg-brand-blue-50 hover:text-brand-blue-700"
     >
       <span>🌤️</span>
-      <span className="font-semibold">{name}</span>
       {weather ? (
-        <span className="inline-flex items-center gap-1">
-          <span>
+        <span className="min-w-0">
+          <span className="block font-semibold">{name}</span>
+          <span className="block">
             L {celsiusToFahrenheit(weather.temperatureMinC ?? weather.temperatureC ?? 0)}° · H {celsiusToFahrenheit(
               weather.temperatureMaxC ?? weather.temperatureC ?? 0,
             )}°
           </span>
-          <span className="text-slate-500">
-            · Precipitation {weather.precipitationChance == null ? "—" : `${weather.precipitationChance}%`}
+          <span className="block text-slate-500">
+            Precipitation: {weather.precipitationChance == null ? "—" : `${weather.precipitationChance}%`}
           </span>
         </span>
       ) : (
-        <span className="text-slate-400">—</span>
+        <span className="min-w-0">
+          <span className="block font-semibold">{name}</span>
+          <span className="block text-slate-400">Weather unavailable</span>
+        </span>
       )}
       {weather && usingMockWeather && <DemoBadge label="Est." />}
     </a>
