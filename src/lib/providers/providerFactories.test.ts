@@ -1,0 +1,63 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { getRoutingProvider } from "@/lib/providers/routing";
+import { getWeatherProvider } from "@/lib/providers/weather";
+import { getPlacesProvider } from "@/lib/providers/places";
+import { MockRoutingProvider } from "@/lib/providers/routing/mockRouting";
+import { GoogleMapsRoutingProvider } from "@/lib/providers/routing/googleMaps";
+import { MockWeatherProvider } from "@/lib/providers/weather/mockWeather";
+import { OpenWeatherMapProvider } from "@/lib/providers/weather/openWeatherMap";
+import { MockPlacesProvider } from "@/lib/providers/places/mockPlaces";
+import { GooglePlacesProvider } from "@/lib/providers/places/googlePlaces";
+
+const originalEnv = { ...process.env };
+
+afterEach(() => {
+  process.env = { ...originalEnv };
+});
+
+describe("provider factories — PRD Rule 4 (never hard-code a provider)", () => {
+  it("routing: falls back to the mock provider with no API key, real adapter once one is set", () => {
+    delete process.env.GOOGLE_MAPS_API_KEY;
+    expect(getRoutingProvider()).toBeInstanceOf(MockRoutingProvider);
+
+    process.env.GOOGLE_MAPS_API_KEY = "test-key";
+    expect(getRoutingProvider()).toBeInstanceOf(GoogleMapsRoutingProvider);
+  });
+
+  it("weather: falls back to the mock provider with no API key, real adapter once one is set", () => {
+    delete process.env.WEATHER_API_KEY;
+    expect(getWeatherProvider()).toBeInstanceOf(MockWeatherProvider);
+
+    process.env.WEATHER_API_KEY = "test-key";
+    expect(getWeatherProvider()).toBeInstanceOf(OpenWeatherMapProvider);
+  });
+
+  it("places: falls back to the mock provider with no API key, real adapter once one is set", () => {
+    delete process.env.GOOGLE_MAPS_API_KEY;
+    expect(getPlacesProvider()).toBeInstanceOf(MockPlacesProvider);
+
+    process.env.GOOGLE_MAPS_API_KEY = "test-key";
+    expect(getPlacesProvider()).toBeInstanceOf(GooglePlacesProvider);
+  });
+});
+
+describe("MockRoutingProvider", () => {
+  it("is deterministic for the same origin/destination", async () => {
+    const provider = new MockRoutingProvider();
+    const a = await provider.calculateRoute({ origin: "Dallas, TX", destination: "Denver, CO", travelMode: "driving" });
+    const b = await provider.calculateRoute({ origin: "Dallas, TX", destination: "Denver, CO", travelMode: "driving" });
+    expect(a.distanceMeters).toBe(b.distanceMeters);
+    expect(a.estimatedDurationSeconds).toBe(b.estimatedDurationSeconds);
+    expect(a.provider).toBe("mock");
+  });
+});
+
+describe("MockWeatherProvider", () => {
+  it("tags mock data with source 'mock' equivalent (provider field) for the Rule 5 demo badge", async () => {
+    const provider = new MockWeatherProvider();
+    const forecast = await provider.getForecast({ latitude: 39.7, longitude: -104.99, forecastFor: new Date().toISOString() });
+    expect(forecast.provider).toBe("mock");
+    expect(forecast.precipitationChance).toBeGreaterThanOrEqual(0);
+    expect(forecast.precipitationChance).toBeLessThanOrEqual(100);
+  });
+});

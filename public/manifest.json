@@ -1,0 +1,32 @@
+{
+  "id": "/my-trip",
+  "name": "BuildTripForYou",
+  "short_name": "BuildTripForYou",
+  "description": "Your AI Travel Companion — Plan it. Experience it. Enjoy it.",
+  "start_url": "/my-trip",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eef4ff",
+  "theme_color": "#1f56f5",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
