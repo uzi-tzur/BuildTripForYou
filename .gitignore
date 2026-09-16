@@ -41,3 +41,5 @@ next-env.d.ts
 
 # scratch headless-Chrome profiles used for verification
 /.chrome-profile-*/
+
+.vercel
