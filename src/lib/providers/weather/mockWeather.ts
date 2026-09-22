@@ -34,6 +34,15 @@ export class MockWeatherProvider implements WeatherProvider {
     const precipitationChance = condition === "Thunderstorms" ? 70 + (seed % 20) : condition === "Light Rain" ? 40 + (seed % 20) : seed % 15;
 
     const temperatureC = 15 + (seed % 20);
+
+    const offsetMatch = forecastFor.match(/([+-]\d{2}:\d{2}|Z)$/);
+    const offsetLabel = offsetMatch ? offsetMatch[0] : "Z";
+    const datePart = forecastFor.slice(0, 10);
+    const precipitationWindows = [8, 12, 16, 20].map((hour, i) => {
+      const variedChance = Math.max(0, Math.min(100, precipitationChance + ((seed >> (i * 3)) % 31) - 15));
+      return { time: `${datePart}T${String(hour).padStart(2, "0")}:00:00${offsetLabel}`, chance: variedChance };
+    });
+
     return {
       id: `mock-weather-${seed}`,
       location: `${latitude.toFixed(2)},${longitude.toFixed(2)}`,
@@ -46,6 +55,7 @@ export class MockWeatherProvider implements WeatherProvider {
       temperatureMaxC: temperatureC + 3 + (seed % 4),
       conditionSummary: condition,
       precipitationChance,
+      precipitationWindows,
       windSpeedKph: 5 + (seed % 25),
       provider: "mock",
     };

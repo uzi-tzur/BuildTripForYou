@@ -59,8 +59,19 @@ export class OpenWeatherMapProvider implements WeatherProvider {
     const dayEntries = sameDayEntries.length > 0 ? sameDayEntries : [closest];
     const temperatureMinC = Math.min(...dayEntries.map((e) => e.main.temp_min ?? e.main.temp));
     const temperatureMaxC = Math.max(...dayEntries.map((e) => e.main.temp_max ?? e.main.temp));
+    const precipitationWindows = dayEntries
+      .map((e) => ({ time: isoAtOffset(e.dt, offsetMinutes), chance: Math.round((e.pop ?? 0) * 100) }))
+      .sort((a, b) => a.time.localeCompare(b.time));
 
-    return toWeatherCondition(closest, request.latitude, request.longitude, request.forecastFor, temperatureMinC, temperatureMaxC);
+    return toWeatherCondition(
+      closest,
+      request.latitude,
+      request.longitude,
+      request.forecastFor,
+      temperatureMinC,
+      temperatureMaxC,
+      precipitationWindows,
+    );
   }
 
   async getCurrentConditions(request: CurrentConditionsRequest): Promise<WeatherCondition> {
@@ -83,6 +94,7 @@ export class OpenWeatherMapProvider implements WeatherProvider {
       new Date().toISOString(),
       data.main.temp_min ?? data.main.temp,
       data.main.temp_max ?? data.main.temp,
+      null,
     );
   }
 }
@@ -100,6 +112,19 @@ function localDateString(unixSeconds: number, offsetMinutes: number): string {
   return new Date(unixSeconds * 1000 + offsetMinutes * 60_000).toISOString().slice(0, 10);
 }
 
+/** Renders a UTC unix timestamp as an ISO string carrying the given UTC-offset, e.g. "2026-09-27T14:00:00-06:00". */
+function isoAtOffset(unixSeconds: number, offsetMinutes: number): string {
+  const shifted = new Date(unixSeconds * 1000 + offsetMinutes * 60_000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const sign = offsetMinutes < 0 ? "-" : "+";
+  const absMinutes = Math.abs(offsetMinutes);
+  const offsetLabel = `${sign}${pad(Math.floor(absMinutes / 60))}:${pad(absMinutes % 60)}`;
+  return (
+    `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}` +
+    `T${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}:00${offsetLabel}`
+  );
+}
+
 function toWeatherCondition(
   entry: OwmWeatherEntry,
   latitude: number,
@@ -107,6 +132,7 @@ function toWeatherCondition(
   forecastFor: string,
   temperatureMinC: number,
   temperatureMaxC: number,
+  precipitationWindows: { time: string; chance: number }[] | null,
 ): WeatherCondition {
   return {
     id: `owm-${entry.dt}-${latitude}-${longitude}`,
@@ -120,6 +146,7 @@ function toWeatherCondition(
     temperatureMaxC,
     conditionSummary: entry.weather[0]?.description ?? entry.weather[0]?.main ?? "Unknown",
     precipitationChance: entry.pop !== undefined ? Math.round(entry.pop * 100) : null,
+    precipitationWindows,
     windSpeedKph: Math.round(entry.wind.speed * 3.6),
     provider: "openweathermap",
   };

@@ -260,6 +260,35 @@ function formatSyncedAgo(iso: string | null): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function WeatherSyncRow({ updatedAt, onRefresh }: { updatedAt: string | null; onRefresh: () => Promise<void> }) {
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function handleClick() {
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 flex items-center justify-between gap-2">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+        <span>🌤️</span>
+        {refreshing ? "Updating weather…" : updatedAt ? `Weather updated ${formatSyncedAgo(updatedAt)}` : "Weather not loaded yet"}
+      </span>
+      <button
+        onClick={() => void handleClick()}
+        disabled={refreshing}
+        className="flex shrink-0 items-center gap-1 rounded-full border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-600 transition-colors hover:border-brand-blue-300 hover:text-brand-blue-700 disabled:opacity-50"
+      >
+        ↻ Refresh weather
+      </button>
+    </div>
+  );
+}
+
 function SyncIndicator({
   status,
   lastSyncedAt,
@@ -348,11 +377,15 @@ export function TripView({
   days,
   weatherByKey,
   usingMockWeather,
+  weatherUpdatedAt,
+  onRefreshWeather,
 }: {
   trip: TripMeta;
   days: TripDay[];
   weatherByKey: Record<string, WeatherCondition | null>;
   usingMockWeather: boolean;
+  weatherUpdatedAt: string | null;
+  onRefreshWeather: () => Promise<void>;
 }) {
   const now = useNow();
   const [customStops, setCustomStops] = useState<CustomStop[]>([]);
@@ -608,6 +641,7 @@ export function TripView({
 
       <div className="px-4 sm:px-6">
         <SyncIndicator status={syncStatus} lastSyncedAt={lastSyncedAt} onSync={() => void manualSync()} />
+        <WeatherSyncRow updatedAt={weatherUpdatedAt} onRefresh={onRefreshWeather} />
         {trip.subtitle && <p className="mt-3 text-[15px] leading-relaxed text-slate-600">{trip.subtitle}</p>}
 
         {phase === "before" && daysUntil !== null && (
@@ -686,6 +720,28 @@ function StopSummary({ label, stop }: { label: string; stop: DisplayStop }) {
   );
 }
 
+/** How high a chance has to be before a time window counts as "likely to rain". */
+const RAIN_LIKELY_THRESHOLD = 30;
+
+function formatHour(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", timeZone: "America/Denver" });
+}
+
+/**
+ * Picks out the forecast intervals with a meaningful rain chance and
+ * describes them as a time range, e.g. "2–5 PM" — or "2 PM" if only one
+ * interval clears the threshold. Returns null when nothing in the day is
+ * likely enough to call out.
+ */
+function rainWindowLabel(windows: { time: string; chance: number }[] | null): string | null {
+  if (!windows) return null;
+  const likely = windows.filter((w) => w.chance >= RAIN_LIKELY_THRESHOLD).sort((a, b) => a.time.localeCompare(b.time));
+  if (likely.length === 0) return null;
+  const start = formatHour(likely[0]!.time);
+  const end = formatHour(likely[likely.length - 1]!.time);
+  return start === end ? start : `${start}–${end}`;
+}
+
 /** Daily low/high and precipitation chance for one named place. */
 function WeatherChip({
   name,
@@ -716,6 +772,10 @@ function WeatherChip({
           <span className="block text-slate-500">
             Precipitation: {weather.precipitationChance == null ? "—" : `${weather.precipitationChance}%`}
           </span>
+          {(() => {
+            const label = rainWindowLabel(weather.precipitationWindows);
+            return label ? <span className="block text-brand-blue-600">☔ Rain likely {label}</span> : null;
+          })()}
         </span>
       ) : (
         <span className="min-w-0">

@@ -12,6 +12,8 @@ export interface WeatherCondition {
   temperatureMaxC: number | null;
   conditionSummary: string;
   precipitationChance: number | null;
+  /** Precipitation chance at each forecast interval across the day, for showing when rain is likeliest. */
+  precipitationWindows: { time: string; chance: number }[] | null;
   windSpeedKph: number | null;
   provider: string;
 }

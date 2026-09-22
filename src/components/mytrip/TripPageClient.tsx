@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { TripView } from "@/components/mytrip/TripView";
 import type { TripDay } from "@/data/coloradoTrip";
 import { getTripDays, loadAllTrips, type TripMeta } from "@/lib/trips";
@@ -12,6 +12,22 @@ export function TripPageClient({ tripId }: { tripId: string }) {
   const [days, setDays] = useState<TripDay[]>([]);
   const [weatherByKey, setWeatherByKey] = useState<Record<string, WeatherCondition | null>>({});
   const [usingMockWeather, setUsingMockWeather] = useState(true);
+  const [weatherUpdatedAt, setWeatherUpdatedAt] = useState<string | null>(null);
+
+  const refreshWeather = useCallback(async (tripDays: TripDay[]) => {
+    const locations = tripDays.flatMap((d) => d.weatherLocations.map((loc) => ({ date: d.date, ...loc })));
+    if (locations.length === 0) return;
+
+    const res = await fetch("/api/mytrip-weather", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locations }),
+    });
+    const body = await res.json();
+    setWeatherByKey(body.weatherByKey ?? {});
+    setUsingMockWeather(Boolean(body.usingMockWeather));
+    setWeatherUpdatedAt(new Date().toISOString());
+  }, []);
 
   useEffect(() => {
     const found = loadAllTrips().find((t) => t.id === tripId) ?? null;
@@ -21,23 +37,10 @@ export function TripPageClient({ tripId }: { tripId: string }) {
     const tripDays = getTripDays(found);
     setDays(tripDays);
 
-    const locations = tripDays.flatMap((d) => d.weatherLocations.map((loc) => ({ date: d.date, ...loc })));
-    if (locations.length === 0) return;
-
-    fetch("/api/mytrip-weather", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ locations }),
-    })
-      .then((res) => res.json())
-      .then((body) => {
-        setWeatherByKey(body.weatherByKey ?? {});
-        setUsingMockWeather(Boolean(body.usingMockWeather));
-      })
-      .catch(() => {
-        // Weather is a nice-to-have here — the trip still renders without it.
-      });
-  }, [tripId]);
+    refreshWeather(tripDays).catch(() => {
+      // Weather is a nice-to-have here — the trip still renders without it.
+    });
+  }, [tripId, refreshWeather]);
 
   if (trip === undefined) {
     return <main className="px-6 py-16 text-center text-slate-400">Loading…</main>;
@@ -58,5 +61,14 @@ export function TripPageClient({ tripId }: { tripId: string }) {
     );
   }
 
-  return <TripView trip={trip} days={days} weatherByKey={weatherByKey} usingMockWeather={usingMockWeather} />;
+  return (
+    <TripView
+      trip={trip}
+      days={days}
+      weatherByKey={weatherByKey}
+      usingMockWeather={usingMockWeather}
+      weatherUpdatedAt={weatherUpdatedAt}
+      onRefreshWeather={() => refreshWeather(days)}
+    />
+  );
 }
