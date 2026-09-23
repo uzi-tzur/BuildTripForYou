@@ -7,6 +7,8 @@
  * src/lib/customStops.ts), same mechanism either way.
  */
 import { COLORADO_TRIP_DAYS, TRIP_META, type TripDay } from "@/data/coloradoTrip";
+import { loadCustomStops, saveCustomStops } from "@/lib/customStops";
+import { loadStopOverrides, saveStopOverrides } from "@/lib/stopOverrides";
 
 export interface TripMeta {
   id: string;
@@ -23,6 +25,18 @@ export interface TripMeta {
   timezoneLabel: string;
   isSeed: boolean;
   createdAt: string;
+  /**
+   * Which day-by-day itinerary this trip renders. "colorado-seed" means
+   * "the real, hand-entered Colorado itinerary" (src/data/coloradoTrip.ts),
+   * shifted by however far this trip's startDate has moved from the
+   * original — set on the built-in trip itself and carried forward by any
+   * trip duplicated from it, so a copy stays independently editable
+   * without losing its content. Absent means a blank trip built entirely
+   * from "+ Add activity".
+   */
+  sourceContent?: "colorado-seed";
+  /** True once the user has removed this trip — kept, not erased, since the built-in trip's content can't be deleted from the app bundle. */
+  hidden?: boolean;
 }
 
 export const SEED_TRIP: TripMeta = {
@@ -37,6 +51,7 @@ export const SEED_TRIP: TripMeta = {
   timezoneLabel: "Colorado time",
   isSeed: true,
   createdAt: "2026-01-01T00:00:00.000Z",
+  sourceContent: "colorado-seed",
 };
 
 const TRIPS_STORAGE_KEY = "gettrip4u-trips";
@@ -83,9 +98,70 @@ export function replaceUserTrips(trips: TripMeta[]): void {
   saveUserTrips(trips);
 }
 
-/** The seed trip always appears first, followed by whatever the user created. */
+/**
+ * Merges the built-in Colorado trip into a trip list: a locally-stored
+ * record with the seed's id AND its sourceContent marker (created the
+ * first time the user renames, reschedules, or deletes it) overrides the
+ * hardcoded default; otherwise the default is used as-is. Requiring the
+ * marker (not just a matching id) guards against a row that reached this
+ * device some other way — e.g. a plain cloud sync row, which never
+ * carries sourceContent — silently taking over as "the itinerary." Hidden
+ * means deleted — dropped from the list entirely, never surfaced.
+ */
+export function withSeedTrip(userTrips: TripMeta[]): TripMeta[] {
+  const storedSeed = userTrips.find((t) => t.id === SEED_TRIP.id && t.sourceContent === "colorado-seed");
+  const others = userTrips.filter((t) => t.id !== SEED_TRIP.id && !t.hidden);
+  const seedEntry = storedSeed ? (storedSeed.hidden ? null : storedSeed) : SEED_TRIP;
+  return seedEntry ? [seedEntry, ...others] : others;
+}
+
+/** The seed trip always appears first (unless deleted), followed by whatever the user created. */
 export function loadAllTrips(): TripMeta[] {
-  return [SEED_TRIP, ...loadUserTrips()];
+  return withSeedTrip(loadUserTrips());
+}
+
+function upsertUserTrip(trip: TripMeta): void {
+  const trips = loadUserTrips();
+  const index = trips.findIndex((t) => t.id === trip.id);
+  saveUserTrips(index === -1 ? [...trips, trip] : trips.map((t, i) => (i === index ? trip : t)));
+}
+
+/** The calendar date (YYYY-MM-DD) `days` after `dateStr` — pure date-part arithmetic, no timezone involved. */
+export function shiftDateOnly(dateStr: string, days: number): string {
+  const [year, month, day] = dateStr.slice(0, 10).split("-").map(Number) as [number, number, number];
+  const shifted = new Date(Date.UTC(year, month - 1, day));
+  shifted.setUTCDate(shifted.getUTCDate() + days);
+  return shifted.toISOString().slice(0, 10);
+}
+
+/** Whole calendar days between two YYYY-MM-DD dates (later minus earlier). */
+export function diffDays(laterDate: string, earlierDate: string): number {
+  const toUtcDays = (s: string) => {
+    const [y, m, d] = s.slice(0, 10).split("-").map(Number) as [number, number, number];
+    return Date.UTC(y, m - 1, d) / 86_400_000;
+  };
+  return Math.round(toUtcDays(laterDate) - toUtcDays(earlierDate));
+}
+
+/** Shifts every day's date and every stop's timestamp by the same whole-day delta, keeping times-of-day and relative structure intact. */
+function shiftTripDays(days: TripDay[], deltaDays: number): TripDay[] {
+  return days.map((day, index) => {
+    const date = shiftDateOnly(day.date, deltaDays);
+    const weekday = new Date(`${date}T00:00:00`).toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+    });
+    return {
+      ...day,
+      date,
+      dayLabel: `Day ${index + 1} · ${weekday}`,
+      stops: day.stops.map((stop) => ({
+        ...stop,
+        time: stop.time ? shiftDateOnly(stop.time, deltaDays) + stop.time.slice(10) : null,
+      })),
+    };
+  });
 }
 
 export function createTrip(input: { name: string; subtitle: string; startDate: string; endDate: string }): TripMeta {
@@ -106,9 +182,46 @@ export function createTrip(input: { name: string; subtitle: string; startDate: s
   return trip;
 }
 
-/** No-op for the seed trip — it isn't stored, so there's nothing to remove. */
+/** For the seed trip, this stores a tombstone (its content can't be erased) — otherwise it's dropped from the list outright. */
 export function deleteTrip(id: string): void {
+  if (id === SEED_TRIP.id) {
+    const current = loadAllTrips().find((t) => t.id === id) ?? SEED_TRIP;
+    upsertUserTrip({ ...current, hidden: true });
+    return;
+  }
   saveUserTrips(loadUserTrips().filter((t) => t.id !== id));
+}
+
+export function updateTrip(id: string, updates: { name?: string; startDate?: string; endDate?: string }): TripMeta {
+  const current = loadAllTrips().find((t) => t.id === id);
+  if (!current) throw new Error(`Trip not found: ${id}`);
+  const next: TripMeta = { ...current, ...updates };
+  // This content's day-by-day plan is a fixed-length, hand-entered itinerary
+  // — it can be moved to a new start date, but not stretched or shrunk, so
+  // the end date always follows the original span rather than whatever was passed in.
+  if (next.sourceContent === "colorado-seed") {
+    next.endDate = shiftDateOnly(next.startDate, diffDays(TRIP_META.endDate, TRIP_META.startDate));
+  }
+  upsertUserTrip(next);
+  return next;
+}
+
+/** Creates an independent copy — same dates and content (including any of the source's own edits), new id, freely editable without touching the original. */
+export function duplicateTrip(id: string): TripMeta {
+  const source = loadAllTrips().find((t) => t.id === id);
+  if (!source) throw new Error(`Trip not found: ${id}`);
+  const copy: TripMeta = {
+    ...source,
+    id: `${slugify(source.name)}-${generateId()}`,
+    name: `${source.name} (Copy)`,
+    isSeed: false,
+    hidden: false,
+    createdAt: new Date().toISOString(),
+  };
+  saveUserTrips([...loadUserTrips(), copy]);
+  saveCustomStops(copy.id, loadCustomStops(source.id));
+  saveStopOverrides(copy.id, loadStopOverrides(source.id));
+  return copy;
 }
 
 const SYNCED_IDS_KEY = "gettrip4u-trips-synced-ids";
@@ -142,9 +255,12 @@ export function markTripSynced(id: string): void {
   }
 }
 
-/** The seed trip's real, pre-loaded itinerary; any other trip starts blank. */
+/** The seed trip's real, pre-loaded itinerary (shifted if its dates moved); any other trip starts blank. */
 export function getTripDays(trip: TripMeta): TripDay[] {
-  if (trip.id === SEED_TRIP.id) return COLORADO_TRIP_DAYS;
+  if (trip.sourceContent === "colorado-seed") {
+    const delta = diffDays(trip.startDate, TRIP_META.startDate);
+    return delta === 0 ? COLORADO_TRIP_DAYS : shiftTripDays(COLORADO_TRIP_DAYS, delta);
+  }
   return generateBlankTripDays(trip.startDate, trip.endDate);
 }
 

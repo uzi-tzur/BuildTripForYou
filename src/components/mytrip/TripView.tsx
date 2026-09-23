@@ -110,8 +110,17 @@ interface StaticStopRef {
   id: string;
 }
 
+/**
+ * Ids are based on each stop's position in the itinerary, not its date —
+ * a trip's dates can shift (see trips.ts's date-shifting for the Colorado
+ * itinerary), and a position-based id keeps a stop's overrides (rename,
+ * delete, time edit) attached to it across a shift instead of orphaning
+ * them under a now-stale date-based key.
+ */
 function getAllStaticStopRefs(days: TripDay[]): StaticStopRef[] {
-  return days.flatMap((day) => day.stops.map((stop, i) => ({ originalDate: day.date, index: i, stop, id: `${day.date}-${i}` })));
+  return days.flatMap((day, dayIndex) =>
+    day.stops.map((stop, i) => ({ originalDate: day.date, index: i, stop, id: `day${dayIndex}-stop${i}` })),
+  );
 }
 
 function staticRefToDisplay(

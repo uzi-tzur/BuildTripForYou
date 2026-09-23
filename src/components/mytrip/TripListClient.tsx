@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
+import { EditTripDatesForm } from "@/components/mytrip/EditTripDatesForm";
 import { BRAND } from "@/config/brand";
 import { formatDateUS } from "@/lib/format";
 import { getOrCreateSyncCode, setSyncCode as saveSyncCode } from "@/lib/syncCode";
@@ -16,11 +18,14 @@ import {
 import {
   createTrip,
   deleteTrip,
+  diffDays,
+  duplicateTrip,
   loadSyncedTripIds,
   loadUserTrips,
   markTripSynced,
   replaceUserTrips,
-  SEED_TRIP,
+  updateTrip,
+  withSeedTrip,
   type TripMeta,
 } from "@/lib/trips";
 
@@ -41,7 +46,7 @@ export function TripListClient() {
 
   async function refreshTrips(code: string) {
     const localTrips = loadUserTrips();
-    setTrips([SEED_TRIP, ...localTrips]);
+    setTrips(withSeedTrip(localTrips));
 
     if (!cloudTripListAvailable()) {
       setSyncStatus("offline");
@@ -58,21 +63,29 @@ export function TripListClient() {
     const cloudTrips = result.data;
     const cloudIds = new Set(cloudTrips.map((t) => t.id));
     const syncedIds = loadSyncedTripIds();
-    // Trips this device knows about that the cloud has never seen AND that
-    // were never confirmed synced before: genuinely new, push them up.
-    // (A trip that WAS synced before but is now missing from the cloud was
-    // deleted on another device — dropping it here, instead of re-pushing
-    // it, is what stops a deleted trip from coming back to life.)
-    const newLocalTrips = localTrips.filter((t) => !cloudIds.has(t.id) && !syncedIds.has(t.id));
+
+    // colorado-seed content (the built-in trip and any duplicate of it)
+    // is never part of the family cloud list — its content lives in the
+    // app bundle, not the cloud row, so it stays local-only regardless of
+    // cloud state (see applyTripUpdate) but must still survive this merge.
+    const localColoradoSeedTrips = localTrips.filter((t) => t.sourceContent === "colorado-seed");
+    const ordinaryLocalTrips = localTrips.filter((t) => t.sourceContent !== "colorado-seed");
+
+    // Ordinary trips this device knows about that the cloud has never seen
+    // AND that were never confirmed synced before: genuinely new, push them
+    // up. (A trip that WAS synced before but is now missing from the cloud
+    // was deleted on another device — dropping it here, instead of
+    // re-pushing it, is what stops a deleted trip from coming back to life.)
+    const newLocalTrips = ordinaryLocalTrips.filter((t) => !cloudIds.has(t.id) && !syncedIds.has(t.id));
     for (const t of newLocalTrips) {
       void pushTripToCloud(t, code).then((ok) => {
         if (ok) markTripSynced(t.id);
       });
     }
 
-    const merged = [...cloudTrips, ...newLocalTrips];
+    const merged = [...cloudTrips, ...newLocalTrips, ...localColoradoSeedTrips];
     replaceUserTrips(merged);
-    setTrips([SEED_TRIP, ...merged]);
+    setTrips(withSeedTrip(merged));
     setSyncStatus("synced");
   }
 
@@ -93,6 +106,39 @@ export function TripListClient() {
     deleteTrip(id);
     setTrips((prev) => prev?.filter((t) => t.id !== id) ?? null);
     void deleteTripFromCloud(id);
+  }
+
+  /**
+   * The Colorado trip (and any copy of it) isn't pushed to the family
+   * cloud list — its content lives in the app bundle, not the cloud row,
+   * so a plain metadata sync would round-trip it back without that
+   * content marker and turn it into an empty trip on another device.
+   */
+  function applyTripUpdate(updated: TripMeta) {
+    setTrips((prev) => prev?.map((t) => (t.id === updated.id ? updated : t)) ?? null);
+    if (updated.sourceContent !== "colorado-seed") {
+      void pushTripToCloud(updated, syncCode).then((ok) => {
+        if (ok) markTripSynced(updated.id);
+      });
+    }
+  }
+
+  function handleRename(id: string, name: string) {
+    applyTripUpdate(updateTrip(id, { name }));
+  }
+
+  function handleChangeDates(id: string, startDate: string, endDate: string) {
+    applyTripUpdate(updateTrip(id, { startDate, endDate }));
+  }
+
+  function handleDuplicate(trip: TripMeta) {
+    const copy = duplicateTrip(trip.id);
+    setTrips((prev) => (prev ? [...prev, copy] : [copy]));
+    if (copy.sourceContent !== "colorado-seed") {
+      void pushTripToCloud(copy, syncCode).then((ok) => {
+        if (ok) markTripSynced(copy.id);
+      });
+    }
   }
 
   function handleUseCode(event: FormEvent) {
@@ -175,31 +221,14 @@ export function TripListClient() {
           {trips === null && <p className="text-sm text-slate-400">Loading…</p>}
 
           {trips?.map((trip) => (
-            <div
+            <TripRow
               key={trip.id}
-              className="flex items-center justify-between gap-3 rounded-2xl bg-white p-4 shadow-card ring-1 ring-slate-100 transition-all hover:shadow-card-hover hover:ring-brand-blue-200"
-            >
-              <Link href={`/my-trip/${trip.id}`} className="flex min-w-0 flex-1 items-center gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue-500 to-brand-green-500 text-lg text-white">
-                  ✈️
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-slate-900">{trip.name}</p>
-                  <p className="text-sm text-slate-500">
-                    {formatDateUS(trip.startDate)} → {formatDateUS(trip.endDate)}
-                  </p>
-                </div>
-              </Link>
-              {!trip.isSeed && (
-                <button
-                  onClick={() => handleDelete(trip.id)}
-                  aria-label={`Delete ${trip.name}`}
-                  className="shrink-0 rounded-full px-2.5 py-1 text-sm text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
-                >
-                  Delete
-                </button>
-              )}
-            </div>
+              trip={trip}
+              onRename={handleRename}
+              onChangeDates={handleChangeDates}
+              onDuplicate={handleDuplicate}
+              onDelete={handleDelete}
+            />
           ))}
         </div>
 
@@ -217,6 +246,95 @@ export function TripListClient() {
         </div>
       </div>
     </main>
+  );
+}
+
+function TripRow({
+  trip,
+  onRename,
+  onChangeDates,
+  onDuplicate,
+  onDelete,
+}: {
+  trip: TripMeta;
+  onRename: (id: string, name: string) => void;
+  onChangeDates: (id: string, startDate: string, endDate: string) => void;
+  onDuplicate: (trip: TripMeta) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState<"name" | "dates" | null>(null);
+  const fixedDurationDays = trip.sourceContent === "colorado-seed" ? diffDays(trip.endDate, trip.startDate) : null;
+
+  return (
+    <div className="rounded-2xl bg-white p-4 shadow-card ring-1 ring-slate-100 transition-all hover:shadow-card-hover hover:ring-brand-blue-200">
+      <div className="flex items-center justify-between gap-3">
+        <Link href={`/my-trip/${trip.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue-500 to-brand-green-500 text-lg text-white">
+            ✈️
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-slate-900">{trip.name}</p>
+            <p className="text-sm text-slate-500">
+              {formatDateUS(trip.startDate)} → {formatDateUS(trip.endDate)}
+            </p>
+          </div>
+        </Link>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            onClick={() => setEditing(editing === "name" ? null : "name")}
+            aria-label="Rename trip"
+            className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-brand-green-50 hover:text-brand-green-600"
+          >
+            🏷️
+          </button>
+          <button
+            onClick={() => setEditing(editing === "dates" ? null : "dates")}
+            aria-label="Change trip dates"
+            className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-brand-blue-50 hover:text-brand-blue-600"
+          >
+            📅
+          </button>
+          <button
+            onClick={() => onDuplicate(trip)}
+            aria-label={`Duplicate ${trip.name}`}
+            className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          >
+            ⧉
+          </button>
+          <button
+            onClick={() => onDelete(trip.id)}
+            aria-label={`Delete ${trip.name}`}
+            className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+
+      {editing === "name" && (
+        <EditTitleForm
+          initialTitle={trip.name}
+          onSave={(name) => {
+            onRename(trip.id, name);
+            setEditing(null);
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      )}
+
+      {editing === "dates" && (
+        <EditTripDatesForm
+          startDate={trip.startDate}
+          endDate={trip.endDate}
+          fixedDurationDays={fixedDurationDays}
+          onSave={(startDate, endDate) => {
+            onChangeDates(trip.id, startDate, endDate);
+            setEditing(null);
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      )}
+    </div>
   );
 }
 
