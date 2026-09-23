@@ -267,48 +267,47 @@ function TripRow({
 
   return (
     <div className="rounded-2xl bg-white p-4 shadow-card ring-1 ring-slate-100 transition-all hover:shadow-card-hover hover:ring-brand-blue-200">
-      <div className="flex items-center justify-between gap-3">
-        <Link href={`/my-trip/${trip.id}`} className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue-500 to-brand-green-500 text-lg text-white">
-            ✈️
-          </span>
-          <div className="min-w-0">
-            <p className="truncate font-semibold text-slate-900">{trip.name}</p>
-            <p className="text-sm text-slate-500">
-              {formatDateUS(trip.startDate)} → {formatDateUS(trip.endDate)}
-            </p>
-          </div>
-        </Link>
-        <div className="flex shrink-0 items-center gap-0.5">
-          <button
-            onClick={() => setEditing(editing === "name" ? null : "name")}
-            aria-label="Rename trip"
-            className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-brand-green-50 hover:text-brand-green-600"
-          >
-            🏷️
-          </button>
-          <button
-            onClick={() => setEditing(editing === "dates" ? null : "dates")}
-            aria-label="Change trip dates"
-            className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-brand-blue-50 hover:text-brand-blue-600"
-          >
-            📅
-          </button>
-          <button
-            onClick={() => onDuplicate(trip)}
-            aria-label={`Duplicate ${trip.name}`}
-            className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-          >
-            ⧉
-          </button>
-          <button
-            onClick={() => onDelete(trip.id)}
-            aria-label={`Delete ${trip.name}`}
-            className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
-          >
-            🗑️
-          </button>
+      <Link href={`/my-trip/${trip.id}`} className="flex min-w-0 items-center gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue-500 to-brand-green-500 text-lg text-white">
+          ✈️
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold text-slate-900">{trip.name}</p>
+          <p className="truncate text-sm text-slate-500">
+            {formatDateUS(trip.startDate)} → {formatDateUS(trip.endDate)}
+          </p>
         </div>
+      </Link>
+
+      <div className="mt-2 flex items-center justify-end gap-1 border-t border-slate-100 pt-2">
+        <button
+          onClick={() => setEditing(editing === "name" ? null : "name")}
+          aria-label="Rename trip"
+          className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-brand-green-50 hover:text-brand-green-600"
+        >
+          🏷️
+        </button>
+        <button
+          onClick={() => setEditing(editing === "dates" ? null : "dates")}
+          aria-label="Change trip dates"
+          className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-brand-blue-50 hover:text-brand-blue-600"
+        >
+          📅
+        </button>
+        <button
+          onClick={() => onDuplicate(trip)}
+          aria-label={`Duplicate ${trip.name}`}
+          className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+        >
+          ⧉
+        </button>
+        <button
+          onClick={() => onDelete(trip.id)}
+          aria-label={`Delete ${trip.name}`}
+          className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
+        >
+          🗑️
+        </button>
       </div>
 
       {editing === "name" && (
