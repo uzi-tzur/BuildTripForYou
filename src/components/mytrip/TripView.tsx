@@ -922,6 +922,7 @@ function DaySection({
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
+  const [checkingWeatherId, setCheckingWeatherId] = useState<string | null>(null);
   useEffect(() => {
     if (isActive) setOpen(true);
   }, [isActive]);
@@ -958,6 +959,7 @@ function DaySection({
                 const isEditingNote = editingNoteId === stop.id;
                 const isEditingTitle = editingTitleId === stop.id;
                 const isEditingPhoto = editingPhotoId === stop.id;
+                const isCheckingWeather = checkingWeatherId === stop.id;
                 return (
                   <li
                     key={stop.id}
@@ -1009,7 +1011,7 @@ function DaySection({
                           </div>
                         </div>
 
-                        {stop.weatherLocationName &&
+                        {stop.weatherLocationName ? (
                           (() => {
                             const match = weatherEntries.find((e) => e.name === stop.weatherLocationName);
                             return match ? (
@@ -1017,7 +1019,22 @@ function DaySection({
                                 <WeatherChip name={match.name} weather={match.weather} usingMockWeather={usingMockWeather} />
                               </div>
                             ) : null;
-                          })()}
+                          })()
+                        ) : (
+                          isCheckingWeather &&
+                          weatherEntries.length > 0 && (
+                            <div className="mt-1.5 flex flex-wrap gap-1.5">
+                              {weatherEntries.map((entry) => (
+                                <WeatherChip
+                                  key={entry.name}
+                                  name={entry.name}
+                                  weather={entry.weather}
+                                  usingMockWeather={usingMockWeather}
+                                />
+                              ))}
+                            </div>
+                          )
+                        )}
 
                         {stop.photoUrl && (
                           <div className="mt-2">
@@ -1081,6 +1098,14 @@ function DaySection({
                           >
                             🔍 Search
                           </a>
+                          {!stop.weatherLocationName && weatherEntries.length > 0 && (
+                            <button
+                              onClick={() => setCheckingWeatherId(isCheckingWeather ? null : stop.id)}
+                              className="whitespace-nowrap rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-all hover:border-sky-300 hover:text-sky-700 active:scale-95"
+                            >
+                              🌦️ {isCheckingWeather ? "Hide Weather" : "Check Weather"}
+                            </button>
+                          )}
                           <button
                             onClick={() => setEditingPhotoId(isEditingPhoto ? null : stop.id)}
                             className="whitespace-nowrap rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-all hover:border-violet-300 hover:text-violet-700 active:scale-95"
