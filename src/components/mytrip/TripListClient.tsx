@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
 import { EditTripDatesForm } from "@/components/mytrip/EditTripDatesForm";
+import { EditTripPhotoForm } from "@/components/mytrip/EditTripPhotoForm";
 import { BRAND } from "@/config/brand";
 import { formatDateUS } from "@/lib/format";
 import { getOrCreateSyncCode, setSyncCode as saveSyncCode } from "@/lib/syncCode";
@@ -133,6 +134,10 @@ export function TripListClient() {
     applyTripUpdate(updateTrip(id, { startDate, endDate }));
   }
 
+  function handleChangePhoto(id: string, heroImage: string, heroCaption: string) {
+    applyTripUpdate(updateTrip(id, { heroImage, heroCaption: heroCaption || null }));
+  }
+
   function handleDuplicate(trip: TripMeta) {
     const copy = duplicateTrip(trip.id);
     setTrips((prev) => (prev ? [...prev, copy] : [copy]));
@@ -226,6 +231,7 @@ export function TripListClient() {
               trip={trip}
               onRename={handleRename}
               onChangeDates={handleChangeDates}
+              onChangePhoto={handleChangePhoto}
               onDuplicate={handleDuplicate}
               onDelete={handleDelete}
             />
@@ -253,16 +259,18 @@ function TripRow({
   trip,
   onRename,
   onChangeDates,
+  onChangePhoto,
   onDuplicate,
   onDelete,
 }: {
   trip: TripMeta;
   onRename: (id: string, name: string) => void;
   onChangeDates: (id: string, startDate: string, endDate: string) => void;
+  onChangePhoto: (id: string, heroImage: string, heroCaption: string) => void;
   onDuplicate: (trip: TripMeta) => void;
   onDelete: (id: string) => void;
 }) {
-  const [editing, setEditing] = useState<"name" | "dates" | null>(null);
+  const [editing, setEditing] = useState<"name" | "dates" | "photo" | null>(null);
   const fixedDurationDays = trip.sourceContent === "colorado-seed" ? diffDays(trip.endDate, trip.startDate) : null;
 
   return (
@@ -293,6 +301,13 @@ function TripRow({
           className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-brand-blue-50 hover:text-brand-blue-600"
         >
           📅
+        </button>
+        <button
+          onClick={() => setEditing(editing === "photo" ? null : "photo")}
+          aria-label="Change background photo"
+          className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-violet-50 hover:text-violet-600"
+        >
+          🖼️
         </button>
         <button
           onClick={() => onDuplicate(trip)}
@@ -328,6 +343,17 @@ function TripRow({
           fixedDurationDays={fixedDurationDays}
           onSave={(startDate, endDate) => {
             onChangeDates(trip.id, startDate, endDate);
+            setEditing(null);
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      )}
+
+      {editing === "photo" && (
+        <EditTripPhotoForm
+          initialQuery={trip.name}
+          onSave={(heroImage, heroCaption) => {
+            onChangePhoto(trip.id, heroImage, heroCaption);
             setEditing(null);
           }}
           onCancel={() => setEditing(null)}

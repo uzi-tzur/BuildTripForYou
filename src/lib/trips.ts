@@ -192,7 +192,10 @@ export function deleteTrip(id: string): void {
   saveUserTrips(loadUserTrips().filter((t) => t.id !== id));
 }
 
-export function updateTrip(id: string, updates: { name?: string; startDate?: string; endDate?: string }): TripMeta {
+export function updateTrip(
+  id: string,
+  updates: { name?: string; startDate?: string; endDate?: string; heroImage?: string | null; heroCaption?: string | null },
+): TripMeta {
   const current = loadAllTrips().find((t) => t.id === id);
   if (!current) throw new Error(`Trip not found: ${id}`);
   const next: TripMeta = { ...current, ...updates };

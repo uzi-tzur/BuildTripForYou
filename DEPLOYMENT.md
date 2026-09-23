@@ -36,6 +36,7 @@ real value for:
 | `GOOGLE_MAPS_API_KEY` | No | Without it, routing/places run in mock mode |
 | `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY` | No | Without it, the Map screen shows a stop-list instead of an interactive map |
 | `WEATHER_API_KEY` | No | Without it, weather runs in mock mode |
+| `PEXELS_API_KEY` | No | Without it, trip hero-photo search shows placeholder demo photos |
 
 Apply each to **Production** (and Preview, if you want PR previews to
 behave the same way).

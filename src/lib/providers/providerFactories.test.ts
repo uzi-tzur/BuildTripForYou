@@ -2,12 +2,15 @@ import { afterEach, describe, expect, it } from "vitest";
 import { getRoutingProvider } from "@/lib/providers/routing";
 import { getWeatherProvider } from "@/lib/providers/weather";
 import { getPlacesProvider } from "@/lib/providers/places";
+import { getImageProvider } from "@/lib/providers/images";
 import { MockRoutingProvider } from "@/lib/providers/routing/mockRouting";
 import { GoogleMapsRoutingProvider } from "@/lib/providers/routing/googleMaps";
 import { MockWeatherProvider } from "@/lib/providers/weather/mockWeather";
 import { OpenWeatherMapProvider } from "@/lib/providers/weather/openWeatherMap";
 import { MockPlacesProvider } from "@/lib/providers/places/mockPlaces";
 import { GooglePlacesProvider } from "@/lib/providers/places/googlePlaces";
+import { MockImageProvider } from "@/lib/providers/images/mockImages";
+import { PexelsImageProvider } from "@/lib/providers/images/pexelsImages";
 
 const originalEnv = { ...process.env };
 
@@ -38,6 +41,24 @@ describe("provider factories — PRD Rule 4 (never hard-code a provider)", () =>
 
     process.env.GOOGLE_MAPS_API_KEY = "test-key";
     expect(getPlacesProvider()).toBeInstanceOf(GooglePlacesProvider);
+  });
+
+  it("images: falls back to the mock provider with no API key, real adapter once one is set", () => {
+    delete process.env.PEXELS_API_KEY;
+    expect(getImageProvider()).toBeInstanceOf(MockImageProvider);
+
+    process.env.PEXELS_API_KEY = "test-key";
+    expect(getImageProvider()).toBeInstanceOf(PexelsImageProvider);
+  });
+});
+
+describe("MockImageProvider", () => {
+  it("tags mock data with provider 'mock' (PRD Rule 5 demo badge) and returns usable results", async () => {
+    const provider = new MockImageProvider();
+    const results = await provider.search("Great Smoky Mountains");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.every((r) => r.provider === "mock")).toBe(true);
+    expect(results.every((r) => r.url.startsWith("https://"))).toBe(true);
   });
 });
 
