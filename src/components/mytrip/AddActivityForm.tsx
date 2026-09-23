@@ -38,7 +38,11 @@ export function AddActivityForm({
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
+  const [airport, setAirport] = useState("");
+  const [airline, setAirline] = useState("");
+  const [flightNumber, setFlightNumber] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const isAirport = category === "airport";
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -65,6 +69,9 @@ export function AddActivityForm({
         address: address.trim() || null,
         phone: phone.trim() || null,
         notes: notes.trim() || null,
+        airport: isAirport ? airport.trim() || null : null,
+        airline: isAirport ? airline.trim() || null : null,
+        flightNumber: isAirport ? flightNumber.trim().toUpperCase() || null : null,
         createdAt: new Date().toISOString(),
       });
     } catch (err) {
@@ -94,8 +101,31 @@ export function AddActivityForm({
         className={inputClass}
       />
 
+      {isAirport && (
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            value={airport}
+            onChange={(e) => setAirport(e.target.value)}
+            placeholder="Airport (e.g. DEN)"
+            className={inputClass}
+          />
+          <input
+            value={airline}
+            onChange={(e) => setAirline(e.target.value)}
+            placeholder="Airline (e.g. American Airlines)"
+            className={inputClass}
+          />
+          <input
+            value={flightNumber}
+            onChange={(e) => setFlightNumber(e.target.value)}
+            placeholder="Flight number (e.g. AA1523)"
+            className={`${inputClass} col-span-2`}
+          />
+        </div>
+      )}
+
       <div>
-        <p className={labelClass}>Starts</p>
+        <p className={labelClass}>{isAirport ? "Departure" : "Starts"}</p>
         <div className="grid grid-cols-2 gap-2">
           <input
             type="date"

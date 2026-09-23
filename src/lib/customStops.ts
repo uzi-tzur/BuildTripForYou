@@ -67,6 +67,11 @@ export interface CustomStop {
   notes: string | null;
   photoUrl?: string | null;
   photoCaption?: string | null;
+  /** Only meaningful for category "airport" — departure airport code/name, e.g. "DEN". */
+  airport?: string | null;
+  airline?: string | null;
+  /** e.g. "AA1523" — what a flight-status lookup is keyed on. */
+  flightNumber?: string | null;
   createdAt: string;
 }
 

@@ -7,6 +7,7 @@ import { AddActivityForm } from "@/components/mytrip/AddActivityForm";
 import { EditNoteForm } from "@/components/mytrip/EditNoteForm";
 import { EditTimeForm } from "@/components/mytrip/EditTimeForm";
 import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
+import { FlightStatusPanel } from "@/components/mytrip/FlightStatusPanel";
 import { PhotoSearchForm } from "@/components/mytrip/PhotoSearchForm";
 import { Chevron } from "@/components/ui/Chevron";
 import { DemoBadge } from "@/components/ui/DemoBadge";
@@ -923,6 +924,7 @@ function DaySection({
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
   const [checkingWeatherId, setCheckingWeatherId] = useState<string | null>(null);
+  const [checkingFlightId, setCheckingFlightId] = useState<string | null>(null);
   useEffect(() => {
     if (isActive) setOpen(true);
   }, [isActive]);
@@ -960,6 +962,7 @@ function DaySection({
                 const isEditingTitle = editingTitleId === stop.id;
                 const isEditingPhoto = editingPhotoId === stop.id;
                 const isCheckingWeather = checkingWeatherId === stop.id;
+                const isCheckingFlight = checkingFlightId === stop.id;
                 return (
                   <li
                     key={stop.id}
@@ -1045,6 +1048,21 @@ function DaySection({
                           </div>
                         )}
 
+                        {stop.custom?.flightNumber && (
+                          <p className="mt-1 text-sm text-slate-500">
+                            ✈️ {stop.custom.flightNumber}
+                            {stop.custom.airline && ` · ${stop.custom.airline}`}
+                            {stop.custom.airport && ` · ${stop.custom.airport}`}
+                          </p>
+                        )}
+                        {isCheckingFlight && stop.custom?.flightNumber && (
+                          <FlightStatusPanel
+                            flightNumber={stop.custom.flightNumber}
+                            airport={stop.custom.airport ?? null}
+                            airline={stop.custom.airline ?? null}
+                          />
+                        )}
+
                         {stop.description && <p className="mt-1 text-sm leading-relaxed text-slate-600">{stop.description}</p>}
                         {stop.phone && <p className="mt-1 text-sm text-slate-500">📞 {stop.phone}</p>}
                         {stop.cost && <p className="mt-1 text-sm text-slate-500">💰 {stop.cost}</p>}
@@ -1104,6 +1122,14 @@ function DaySection({
                               className="whitespace-nowrap rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-all hover:border-sky-300 hover:text-sky-700 active:scale-95"
                             >
                               🌦️ {isCheckingWeather ? "Hide Weather" : "Check Weather"}
+                            </button>
+                          )}
+                          {stop.custom?.flightNumber && (
+                            <button
+                              onClick={() => setCheckingFlightId(isCheckingFlight ? null : stop.id)}
+                              className="whitespace-nowrap rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-all hover:border-sky-300 hover:text-sky-700 active:scale-95"
+                            >
+                              ✈️ {isCheckingFlight ? "Hide Flight Status" : "Check Flight Status"}
                             </button>
                           )}
                           <button
