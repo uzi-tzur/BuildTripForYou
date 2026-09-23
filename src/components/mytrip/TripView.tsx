@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AddActivityForm } from "@/components/mytrip/AddActivityForm";
 import { EditNoteForm } from "@/components/mytrip/EditNoteForm";
 import { EditTimeForm } from "@/components/mytrip/EditTimeForm";
+import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
 import { Chevron } from "@/components/ui/Chevron";
 import { DemoBadge } from "@/components/ui/DemoBadge";
 import type { TripDay, TripStop } from "@/data/coloradoTrip";
@@ -84,6 +85,8 @@ interface DisplayStop {
   timeLabel: string;
   icon: string;
   title: string;
+  /** The renamable title without any display-only prefix (e.g. a custom stop's "Return: " label) — what the rename form edits. */
+  baseTitle: string;
   description?: string | null;
   address?: string | null;
   phone?: string | null;
@@ -143,7 +146,8 @@ function staticRefToDisplay(
       time,
       timeLabel,
       icon: KIND_ICON[stop.kind],
-      title: stop.title,
+      title: override?.title ?? stop.title,
+      baseTitle: override?.title ?? stop.title,
       description: stop.description,
       address: stop.address,
       confirmation: stop.confirmation,
@@ -179,6 +183,7 @@ function customToDisplayEntries(
         timeLabel: stop.time ? formatTripTime(customStopToIso(stop.date, stop.time, utcOffset), timezoneLabel) : "Time not set",
         icon: CUSTOM_STOP_CATEGORY_ICON[stop.category],
         title: stop.title,
+        baseTitle: stop.title,
         address: stop.address,
         phone: stop.phone,
         personalNote: stop.notes,
@@ -200,6 +205,7 @@ function customToDisplayEntries(
           : "Time not set",
         icon: CUSTOM_STOP_CATEGORY_ICON[stop.category],
         title: `${CUSTOM_STOP_END_LABEL[stop.category]}: ${stop.title}`,
+        baseTitle: stop.title,
         address: stop.address,
         phone: stop.phone,
         personalNote: stop.notes,
@@ -220,7 +226,9 @@ function daysWithDisplayStops(
   utcOffset: string,
   timezoneLabel: string,
 ): { day: TripDay; stops: DisplayStop[] }[] {
-  const staticEntries = getAllStaticStopRefs(days).map((ref) => staticRefToDisplay(ref, overrides[ref.id], timezoneLabel));
+  const staticEntries = getAllStaticStopRefs(days)
+    .filter((ref) => !overrides[ref.id]?.deleted)
+    .map((ref) => staticRefToDisplay(ref, overrides[ref.id], timezoneLabel));
   const customEntries = customStops.flatMap((s) => customToDisplayEntries(s, utcOffset, timezoneLabel));
   const allEntries = [...staticEntries, ...customEntries];
 
@@ -565,6 +573,47 @@ export function TripView({
     else editCustomStopNote(ref.customId, note);
   }
 
+  function editStaticTitle(id: string, title: string) {
+    setOverrides((prev) => {
+      const next = { ...prev, [id]: { ...prev[id], title } };
+      saveStopOverrides(trip.id, next);
+      overridesRef.current = next;
+      void pushToCloud(customStopsRef.current, next);
+      return next;
+    });
+  }
+
+  function editCustomStopTitle(customId: string, title: string) {
+    setCustomStops((prev) => {
+      const next = prev.map((s) => (s.id === customId ? { ...s, title } : s));
+      saveCustomStops(trip.id, next);
+      customStopsRef.current = next;
+      void pushToCloud(next, overridesRef.current);
+      return next;
+    });
+  }
+
+  function handleTitleEdit(ref: NoteRef, title: string) {
+    if (ref.kind === "static") editStaticTitle(ref.id, title);
+    else editCustomStopTitle(ref.customId, title);
+  }
+
+  /** Hides a pre-loaded itinerary stop for this device — the base data can't be mutated, so it's marked deleted instead. */
+  function removeStaticStop(id: string) {
+    setOverrides((prev) => {
+      const next = { ...prev, [id]: { ...prev[id], deleted: true } };
+      saveStopOverrides(trip.id, next);
+      overridesRef.current = next;
+      void pushToCloud(customStopsRef.current, next);
+      return next;
+    });
+  }
+
+  function handleRemove(ref: NoteRef) {
+    if (ref.kind === "static") removeStaticStop(ref.id);
+    else removeCustomStop(ref.customId);
+  }
+
   const daysWithStops = useMemo(
     () => daysWithDisplayStops(days, customStops, overrides, trip.timezoneOffset, trip.timezoneLabel),
     [days, customStops, overrides, trip.timezoneOffset, trip.timezoneLabel],
@@ -694,9 +743,10 @@ export function TripView({
               tripEndDate={trip.endDate}
               timezoneLabel={trip.timezoneLabel}
               onAddStop={addCustomStop}
-              onRemoveStop={removeCustomStop}
+              onRemoveStop={handleRemove}
               onEditStop={handleEdit}
               onEditNote={handleNoteEdit}
+              onEditTitle={handleTitleEdit}
             />
           ))}
         </div>
@@ -802,6 +852,7 @@ function DaySection({
   onRemoveStop,
   onEditStop,
   onEditNote,
+  onEditTitle,
 }: {
   day: TripDay;
   stops: DisplayStop[];
@@ -813,14 +864,16 @@ function DaySection({
   tripEndDate: string;
   timezoneLabel: string;
   onAddStop: (stop: CustomStop) => void;
-  onRemoveStop: (id: string) => void;
+  onRemoveStop: (ref: NoteRef) => void;
   onEditStop: (ref: EditRef, date: string, time: string) => void;
   onEditNote: (ref: NoteRef, note: string) => void;
+  onEditTitle: (ref: NoteRef, title: string) => void;
 }) {
   const [open, setOpen] = useState(isActive);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   useEffect(() => {
     if (isActive) setOpen(true);
   }, [isActive]);
@@ -855,6 +908,7 @@ function DaySection({
               {stops.map((stop) => {
                 const isEditing = editingId === stop.id;
                 const isEditingNote = editingNoteId === stop.id;
+                const isEditingTitle = editingTitleId === stop.id;
                 return (
                   <li
                     key={stop.id}
@@ -882,6 +936,13 @@ function DaySection({
                             </p>
                           </div>
                           <div className="flex shrink-0 items-center gap-0.5">
+                            <button
+                              onClick={() => setEditingTitleId(isEditingTitle ? null : stop.id)}
+                              aria-label="Rename activity"
+                              className="rounded-full p-1 text-slate-400 transition-colors hover:bg-white hover:text-brand-green-600"
+                            >
+                              🏷️
+                            </button>
                             <button
                               onClick={() => setEditingNoteId(isEditingNote ? null : stop.id)}
                               aria-label={stop.personalNote ? "Edit your note" : "Add a note"}
@@ -962,15 +1023,13 @@ function DaySection({
                           >
                             🔍 Search
                           </a>
-                          {stop.custom && (
-                            <button
-                              onClick={() => onRemoveStop(stop.custom!.id)}
-                              aria-label="Remove this activity"
-                              className="whitespace-nowrap rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-500 transition-all hover:border-red-400 hover:text-red-500 active:scale-95"
-                            >
-                              Remove
-                            </button>
-                          )}
+                          <button
+                            onClick={() => onRemoveStop(stop.noteEditable)}
+                            aria-label="Remove this activity"
+                            className="whitespace-nowrap rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-500 transition-all hover:border-red-400 hover:text-red-500 active:scale-95"
+                          >
+                            Remove
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1000,6 +1059,17 @@ function DaySection({
                           setEditingNoteId(null);
                         }}
                         onCancel={() => setEditingNoteId(null)}
+                      />
+                    )}
+
+                    {isEditingTitle && (
+                      <EditTitleForm
+                        initialTitle={stop.baseTitle}
+                        onSave={(title) => {
+                          onEditTitle(stop.noteEditable, title);
+                          setEditingTitleId(null);
+                        }}
+                        onCancel={() => setEditingTitleId(null)}
                       />
                     )}
                   </li>

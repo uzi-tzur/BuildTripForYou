@@ -14,6 +14,9 @@ export interface StopOverride {
   date?: string; // YYYY-MM-DD, must be one of the trip's days
   time?: string | null; // "HH:MM" 24h, in the stop's original timezone offset
   note?: string | null; // personal note/story the user added for this stop
+  title?: string; // renamed title — absent means "use the itinerary's original title"
+  /** true if the user removed this pre-loaded stop from their itinerary. */
+  deleted?: boolean;
 }
 
 function storageKey(tripId: string): string {
