@@ -38,6 +38,7 @@ real value for:
 | `WEATHER_API_KEY` | No | Without it, weather runs in mock mode |
 | `PEXELS_API_KEY` | No | Without it, trip hero-photo search shows placeholder demo photos |
 | `AVIATIONSTACK_API_KEY` | No | Without it, flight status checks show demo status data |
+| `MYTRIP_ACCESS_CODE` | Yes, to unlock /my-trip | A 6-digit passcode gating /my-trip (src/middleware.ts) — unset means /my-trip is blocked entirely, not open |
 
 Apply each to **Production** (and Preview, if you want PR previews to
 behave the same way).
