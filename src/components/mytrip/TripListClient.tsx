@@ -24,6 +24,7 @@ import {
   loadUserTrips,
   markTripSynced,
   replaceUserTrips,
+  SEED_TRIP,
   updateTrip,
   withSeedTrip,
   type TripMeta,
@@ -63,27 +64,21 @@ export function TripListClient() {
     const cloudTrips = result.data;
     const cloudIds = new Set(cloudTrips.map((t) => t.id));
     const syncedIds = loadSyncedTripIds();
-
-    // colorado-seed content (the built-in trip and any duplicate of it)
-    // is never part of the family cloud list — its content lives in the
-    // app bundle, not the cloud row, so it stays local-only regardless of
-    // cloud state (see applyTripUpdate) but must still survive this merge.
-    const localColoradoSeedTrips = localTrips.filter((t) => t.sourceContent === "colorado-seed");
-    const ordinaryLocalTrips = localTrips.filter((t) => t.sourceContent !== "colorado-seed");
-
-    // Ordinary trips this device knows about that the cloud has never seen
-    // AND that were never confirmed synced before: genuinely new, push them
-    // up. (A trip that WAS synced before but is now missing from the cloud
-    // was deleted on another device — dropping it here, instead of
-    // re-pushing it, is what stops a deleted trip from coming back to life.)
-    const newLocalTrips = ordinaryLocalTrips.filter((t) => !cloudIds.has(t.id) && !syncedIds.has(t.id));
+    // Trips this device knows about that the cloud has never seen AND that
+    // were never confirmed synced before: genuinely new, push them up.
+    // (A trip that WAS synced before but is now missing from the cloud was
+    // deleted on another device — dropping it here, instead of re-pushing
+    // it, is what stops a deleted trip from coming back to life.) This
+    // includes a locally-customized Colorado trip — its content marker
+    // (source_content) now has a real column, so it round-trips safely.
+    const newLocalTrips = localTrips.filter((t) => !cloudIds.has(t.id) && !syncedIds.has(t.id));
     for (const t of newLocalTrips) {
       void pushTripToCloud(t, code).then((ok) => {
         if (ok) markTripSynced(t.id);
       });
     }
 
-    const merged = [...cloudTrips, ...newLocalTrips, ...localColoradoSeedTrips];
+    const merged = [...cloudTrips, ...newLocalTrips];
     replaceUserTrips(merged);
     setTrips(withSeedTrip(merged));
     setSyncStatus("synced");
@@ -105,22 +100,29 @@ export function TripListClient() {
   function handleDelete(id: string) {
     deleteTrip(id);
     setTrips((prev) => prev?.filter((t) => t.id !== id) ?? null);
-    void deleteTripFromCloud(id);
+    if (id === SEED_TRIP.id) {
+      // Deleting the built-in trip stores a hidden tombstone (see
+      // deleteTrip) rather than removing the row, since its content can't
+      // be erased — that tombstone has to be pushed like any other edit so
+      // other devices see it as deleted too, instead of hard-deleting a
+      // cloud row (which would just leave the un-deleted default showing
+      // there again).
+      const tombstone = loadUserTrips().find((t) => t.id === id);
+      if (tombstone) {
+        void pushTripToCloud(tombstone, syncCode).then((ok) => {
+          if (ok) markTripSynced(tombstone.id);
+        });
+      }
+    } else {
+      void deleteTripFromCloud(id);
+    }
   }
 
-  /**
-   * The Colorado trip (and any copy of it) isn't pushed to the family
-   * cloud list — its content lives in the app bundle, not the cloud row,
-   * so a plain metadata sync would round-trip it back without that
-   * content marker and turn it into an empty trip on another device.
-   */
   function applyTripUpdate(updated: TripMeta) {
     setTrips((prev) => prev?.map((t) => (t.id === updated.id ? updated : t)) ?? null);
-    if (updated.sourceContent !== "colorado-seed") {
-      void pushTripToCloud(updated, syncCode).then((ok) => {
-        if (ok) markTripSynced(updated.id);
-      });
-    }
+    void pushTripToCloud(updated, syncCode).then((ok) => {
+      if (ok) markTripSynced(updated.id);
+    });
   }
 
   function handleRename(id: string, name: string) {
@@ -134,11 +136,9 @@ export function TripListClient() {
   function handleDuplicate(trip: TripMeta) {
     const copy = duplicateTrip(trip.id);
     setTrips((prev) => (prev ? [...prev, copy] : [copy]));
-    if (copy.sourceContent !== "colorado-seed") {
-      void pushTripToCloud(copy, syncCode).then((ok) => {
-        if (ok) markTripSynced(copy.id);
-      });
-    }
+    void pushTripToCloud(copy, syncCode).then((ok) => {
+      if (ok) markTripSynced(copy.id);
+    });
   }
 
   function handleUseCode(event: FormEvent) {

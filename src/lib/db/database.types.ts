@@ -255,6 +255,8 @@ export interface Database {
           timezone_offset: string;
           timezone_label: string;
           created_at: string;
+          source_content: string | null;
+          hidden: boolean;
         };
         Insert: Partial<Database["public"]["Tables"]["mytrip_trip_list"]["Row"]> & {
           id: string;
@@ -293,6 +295,8 @@ export interface Database {
           p_hero_caption: string | null;
           p_timezone_offset: string;
           p_timezone_label: string;
+          p_source_content: string | null;
+          p_hidden: boolean;
         };
         Returns: void;
       };

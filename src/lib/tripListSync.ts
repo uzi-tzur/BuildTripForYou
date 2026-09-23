@@ -37,6 +37,8 @@ export async function pullFamilyTrips(syncCode: string): Promise<PullFamilyTrips
         timezoneLabel: row.timezone_label,
         isSeed: false,
         createdAt: row.created_at,
+        sourceContent: row.source_content === "colorado-seed" ? "colorado-seed" : undefined,
+        hidden: Boolean(row.hidden),
       })),
     };
   } catch {
@@ -68,6 +70,8 @@ export async function pushTripToCloud(trip: TripMeta, syncCode: string): Promise
       p_hero_caption: trip.heroCaption,
       p_timezone_offset: trip.timezoneOffset,
       p_timezone_label: trip.timezoneLabel,
+      p_source_content: trip.sourceContent ?? null,
+      p_hidden: trip.hidden ?? false,
     });
     return !error;
   } catch {
