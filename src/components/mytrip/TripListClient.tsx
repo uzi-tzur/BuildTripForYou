@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
 import { EditTripDatesForm } from "@/components/mytrip/EditTripDatesForm";
-import { EditTripPhotoForm } from "@/components/mytrip/EditTripPhotoForm";
+import { PhotoSearchForm } from "@/components/mytrip/PhotoSearchForm";
 import { BRAND } from "@/config/brand";
 import { formatDateUS } from "@/lib/format";
 import { getOrCreateSyncCode, setSyncCode as saveSyncCode } from "@/lib/syncCode";
@@ -350,10 +350,10 @@ function TripRow({
       )}
 
       {editing === "photo" && (
-        <EditTripPhotoForm
+        <PhotoSearchForm
           initialQuery={trip.name}
-          onSave={(heroImage, heroCaption) => {
-            onChangePhoto(trip.id, heroImage, heroCaption);
+          onSave={(url, caption) => {
+            onChangePhoto(trip.id, url, caption);
             setEditing(null);
           }}
           onCancel={() => setEditing(null)}

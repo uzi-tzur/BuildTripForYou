@@ -7,6 +7,7 @@ import { AddActivityForm } from "@/components/mytrip/AddActivityForm";
 import { EditNoteForm } from "@/components/mytrip/EditNoteForm";
 import { EditTimeForm } from "@/components/mytrip/EditTimeForm";
 import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
+import { PhotoSearchForm } from "@/components/mytrip/PhotoSearchForm";
 import { Chevron } from "@/components/ui/Chevron";
 import { DemoBadge } from "@/components/ui/DemoBadge";
 import type { TripDay, TripStop } from "@/data/coloradoTrip";
@@ -96,6 +97,9 @@ interface DisplayStop {
   warning?: string | null;
   /** A personal note/story the user wrote for this stop — never itinerary data. */
   personalNote?: string | null;
+  /** A photo the user picked for this stop via image search — never itinerary data. */
+  photoUrl?: string | null;
+  photoCaption?: string | null;
   /** Matches a name in the day's weatherLocations — set only on outdoor/town stops. */
   weatherLocationName?: string;
   custom?: CustomStop;
@@ -164,6 +168,8 @@ function staticRefToDisplay(
       tip: stop.tip,
       warning: stop.warning,
       personalNote: override?.note ?? null,
+      photoUrl: override?.photoUrl ?? null,
+      photoCaption: override?.photoCaption ?? null,
       weatherLocationName: stop.weatherLocationName,
       editable: { kind: "static", id: ref.id, date: effectiveDate, time: effectiveTimeHHMM },
       noteEditable: { kind: "static", id: ref.id },
@@ -196,6 +202,8 @@ function customToDisplayEntries(
         address: stop.address,
         phone: stop.phone,
         personalNote: stop.notes,
+        photoUrl: stop.photoUrl ?? null,
+        photoCaption: stop.photoCaption ?? null,
         custom: stop,
         editable: { kind: "custom-start", customId: stop.id, date: stop.date, time: stop.time ?? "" },
         noteEditable: { kind: "custom", customId: stop.id },
@@ -218,6 +226,8 @@ function customToDisplayEntries(
         address: stop.address,
         phone: stop.phone,
         personalNote: stop.notes,
+        photoUrl: stop.photoUrl ?? null,
+        photoCaption: stop.photoCaption ?? null,
         custom: stop,
         editable: { kind: "custom-end", customId: stop.id, date: stop.endDate, time: stop.endTime ?? "" },
         noteEditable: { kind: "custom", customId: stop.id },
@@ -607,6 +617,31 @@ export function TripView({
     else editCustomStopTitle(ref.customId, title);
   }
 
+  function editStaticPhoto(id: string, photoUrl: string, photoCaption: string) {
+    setOverrides((prev) => {
+      const next = { ...prev, [id]: { ...prev[id], photoUrl, photoCaption: photoCaption || null } };
+      saveStopOverrides(trip.id, next);
+      overridesRef.current = next;
+      void pushToCloud(customStopsRef.current, next);
+      return next;
+    });
+  }
+
+  function editCustomStopPhoto(customId: string, photoUrl: string, photoCaption: string) {
+    setCustomStops((prev) => {
+      const next = prev.map((s) => (s.id === customId ? { ...s, photoUrl, photoCaption: photoCaption || null } : s));
+      saveCustomStops(trip.id, next);
+      customStopsRef.current = next;
+      void pushToCloud(next, overridesRef.current);
+      return next;
+    });
+  }
+
+  function handlePhotoEdit(ref: NoteRef, photoUrl: string, photoCaption: string) {
+    if (ref.kind === "static") editStaticPhoto(ref.id, photoUrl, photoCaption);
+    else editCustomStopPhoto(ref.customId, photoUrl, photoCaption);
+  }
+
   /** Hides a pre-loaded itinerary stop for this device — the base data can't be mutated, so it's marked deleted instead. */
   function removeStaticStop(id: string) {
     setOverrides((prev) => {
@@ -756,6 +791,7 @@ export function TripView({
               onEditStop={handleEdit}
               onEditNote={handleNoteEdit}
               onEditTitle={handleTitleEdit}
+              onEditPhoto={handlePhotoEdit}
             />
           ))}
         </div>
@@ -862,6 +898,7 @@ function DaySection({
   onEditStop,
   onEditNote,
   onEditTitle,
+  onEditPhoto,
 }: {
   day: TripDay;
   stops: DisplayStop[];
@@ -877,12 +914,14 @@ function DaySection({
   onEditStop: (ref: EditRef, date: string, time: string) => void;
   onEditNote: (ref: NoteRef, note: string) => void;
   onEditTitle: (ref: NoteRef, title: string) => void;
+  onEditPhoto: (ref: NoteRef, photoUrl: string, photoCaption: string) => void;
 }) {
   const [open, setOpen] = useState(isActive);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
   useEffect(() => {
     if (isActive) setOpen(true);
   }, [isActive]);
@@ -918,6 +957,7 @@ function DaySection({
                 const isEditing = editingId === stop.id;
                 const isEditingNote = editingNoteId === stop.id;
                 const isEditingTitle = editingTitleId === stop.id;
+                const isEditingPhoto = editingPhotoId === stop.id;
                 return (
                   <li
                     key={stop.id}
@@ -979,6 +1019,15 @@ function DaySection({
                             ) : null;
                           })()}
 
+                        {stop.photoUrl && (
+                          <div className="mt-2">
+                            <div className="relative h-32 w-full overflow-hidden rounded-lg ring-1 ring-black/5">
+                              <Image src={stop.photoUrl} alt="" fill sizes="400px" className="object-cover" />
+                            </div>
+                            {stop.photoCaption && <p className="mt-1 text-[11px] text-slate-400">{stop.photoCaption}</p>}
+                          </div>
+                        )}
+
                         {stop.description && <p className="mt-1 text-sm leading-relaxed text-slate-600">{stop.description}</p>}
                         {stop.phone && <p className="mt-1 text-sm text-slate-500">📞 {stop.phone}</p>}
                         {stop.cost && <p className="mt-1 text-sm text-slate-500">💰 {stop.cost}</p>}
@@ -1033,6 +1082,12 @@ function DaySection({
                             🔍 Search
                           </a>
                           <button
+                            onClick={() => setEditingPhotoId(isEditingPhoto ? null : stop.id)}
+                            className="whitespace-nowrap rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-all hover:border-violet-300 hover:text-violet-700 active:scale-95"
+                          >
+                            🖼️ Image Search
+                          </button>
+                          <button
                             onClick={() => onRemoveStop(stop.noteEditable)}
                             aria-label="Remove this activity"
                             className="whitespace-nowrap rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-500 transition-all hover:border-red-400 hover:text-red-500 active:scale-95"
@@ -1079,6 +1134,18 @@ function DaySection({
                           setEditingTitleId(null);
                         }}
                         onCancel={() => setEditingTitleId(null)}
+                      />
+                    )}
+
+                    {isEditingPhoto && (
+                      <PhotoSearchForm
+                        heading={`Search a photo for ${stop.baseTitle}`}
+                        initialQuery={stop.baseTitle}
+                        onSave={(url, caption) => {
+                          onEditPhoto(stop.noteEditable, url, caption);
+                          setEditingPhotoId(null);
+                        }}
+                        onCancel={() => setEditingPhotoId(null)}
                       />
                     )}
                   </li>

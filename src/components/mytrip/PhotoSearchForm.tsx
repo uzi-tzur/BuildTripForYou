@@ -5,13 +5,15 @@ import { useState, type FormEvent } from "react";
 import { DemoBadge } from "@/components/ui/DemoBadge";
 import type { ImageSearchResult } from "@/lib/providers/images";
 
-export function EditTripPhotoForm({
+export function PhotoSearchForm({
+  heading = "Search a photo for the background",
   initialQuery,
   onSave,
   onCancel,
 }: {
+  heading?: string;
   initialQuery: string;
-  onSave: (heroImage: string, heroCaption: string) => void;
+  onSave: (url: string, caption: string) => void;
   onCancel: () => void;
 }) {
   const [query, setQuery] = useState(initialQuery);
@@ -52,7 +54,7 @@ export function EditTripPhotoForm({
 
   return (
     <div className="mt-3 space-y-2.5 rounded-xl border border-dashed border-violet-300 bg-violet-50/50 p-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Search a photo for the background</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{heading}</p>
       <form onSubmit={handleSearch} className="flex gap-2">
         <input
           value={query}

@@ -17,6 +17,8 @@ export interface StopOverride {
   title?: string; // renamed title — absent means "use the itinerary's original title"
   /** true if the user removed this pre-loaded stop from their itinerary. */
   deleted?: boolean;
+  photoUrl?: string | null;
+  photoCaption?: string | null;
 }
 
 function storageKey(tripId: string): string {

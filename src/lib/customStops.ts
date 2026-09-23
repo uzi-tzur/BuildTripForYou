@@ -65,6 +65,8 @@ export interface CustomStop {
   address: string | null;
   phone: string | null;
   notes: string | null;
+  photoUrl?: string | null;
+  photoCaption?: string | null;
   createdAt: string;
 }
 
