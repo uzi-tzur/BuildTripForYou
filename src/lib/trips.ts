@@ -227,6 +227,28 @@ export function duplicateTrip(id: string): TripMeta {
   return copy;
 }
 
+/**
+ * Puts a backed-up trip back in the list. A trip that's no longer there
+ * (deleted) comes back under its original id; one that still exists is
+ * restored as a separate copy instead — a restore never overwrites what's
+ * currently on screen.
+ */
+export function restoreTrip(trip: TripMeta): TripMeta {
+  const stillExists = loadAllTrips().some((t) => t.id === trip.id);
+  const restored: TripMeta = stillExists
+    ? {
+        ...trip,
+        id: `${slugify(trip.name)}-${generateId()}`,
+        name: `${trip.name} (Restored)`,
+        isSeed: false,
+        hidden: false,
+        createdAt: new Date().toISOString(),
+      }
+    : { ...trip, hidden: false };
+  upsertUserTrip(restored);
+  return restored;
+}
+
 const SYNCED_IDS_KEY = "gettrip4u-trips-synced-ids";
 
 /**

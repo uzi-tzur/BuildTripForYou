@@ -4,11 +4,26 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import { BackupsSection } from "@/components/mytrip/BackupsSection";
+import { DeleteTripConfirm } from "@/components/mytrip/DeleteTripConfirm";
 import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
 import { EditTripDatesForm } from "@/components/mytrip/EditTripDatesForm";
 import { PhotoSearchForm } from "@/components/mytrip/PhotoSearchForm";
+import { TripBackupPanel } from "@/components/mytrip/TripBackupPanel";
 import { BRAND } from "@/config/brand";
 import { formatDateUS } from "@/lib/format";
+import { pushTripSync } from "@/lib/mytripSync";
+import {
+  buildBackupFile,
+  createBackup,
+  deleteBackup,
+  loadBackups,
+  parseBackupFile,
+  restoreSnapshot,
+  snapshotTrip,
+  type TripBackup,
+  type TripSnapshot,
+} from "@/lib/tripBackup";
 import { getOrCreateSyncCode, setSyncCode as saveSyncCode } from "@/lib/syncCode";
 import {
   cloudTripListAvailable,
@@ -45,6 +60,9 @@ export function TripListClient() {
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [codeInputValue, setCodeInputValue] = useState("");
   const [copied, setCopied] = useState(false);
+  const [backups, setBackups] = useState<TripBackup[]>([]);
+  const [backupsOpenSignal, setBackupsOpenSignal] = useState(0);
+  const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   async function refreshTrips(code: string) {
     const localTrips = loadUserTrips();
@@ -88,6 +106,7 @@ export function TripListClient() {
   useEffect(() => {
     const code = getOrCreateSyncCode();
     setSyncCodeState(code);
+    setBackups(loadBackups());
     void refreshTrips(code);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -98,7 +117,20 @@ export function TripListClient() {
     if (ok) markTripSynced(trip.id);
   }
 
+  /** Called only after the user has typed the confirmation word. A backup is saved first — if that can't be done, nothing is deleted. */
   function handleDelete(id: string) {
+    const name = trips?.find((t) => t.id === id)?.name ?? "The trip";
+    if (!createBackup(id, "before-delete")) {
+      setNotice({
+        kind: "error",
+        text: `Couldn't save a backup of "${name}" (this device's storage may be full), so it wasn't deleted. Download a backup file first, then try again.`,
+      });
+      return;
+    }
+    setBackups(loadBackups());
+    setBackupsOpenSignal((n) => n + 1);
+    setNotice({ kind: "ok", text: `Deleted "${name}". A backup was saved — restore it any time from Backups & restore below.` });
+
     deleteTrip(id);
     setTrips((prev) => prev?.filter((t) => t.id !== id) ?? null);
     if (id === SEED_TRIP.id) {
@@ -117,6 +149,63 @@ export function TripListClient() {
     } else {
       void deleteTripFromCloud(id);
     }
+  }
+
+  function handleBackupNow(id: string) {
+    const name = trips?.find((t) => t.id === id)?.name ?? "The trip";
+    if (createBackup(id, "manual")) {
+      setBackups(loadBackups());
+      setBackupsOpenSignal((n) => n + 1);
+      setNotice({ kind: "ok", text: `Backup of "${name}" saved.` });
+    } else {
+      setNotice({ kind: "error", text: `Couldn't save a backup of "${name}" — this device's storage may be full. Try downloading a backup file instead.` });
+    }
+  }
+
+  function handleDownloadBackup(id: string) {
+    const snapshot = snapshotTrip(id);
+    if (!snapshot) return;
+    const file = buildBackupFile(snapshot);
+    const slug = snapshot.trip.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-+|-+$)/g, "") || "trip";
+    const url = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `buildtripforyou-${slug}-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /** Puts a backup back and re-syncs it, so another device (or the cloud's older copy) doesn't immediately win over what was just restored. */
+  function applyRestore(snapshot: TripSnapshot) {
+    const trip = restoreSnapshot(snapshot);
+    setTrips(withSeedTrip(loadUserTrips()));
+    void pushTripToCloud(trip, syncCode).then((ok) => {
+      if (ok) markTripSynced(trip.id);
+    });
+    void pushTripSync(trip.id, snapshot.customStops, snapshot.overrides);
+    const asCopy = trip.id !== snapshot.trip.id;
+    setNotice({
+      kind: "ok",
+      text: asCopy ? `Restored as a separate copy: "${trip.name}". Your current "${snapshot.trip.name}" wasn't changed.` : `Restored "${trip.name}".`,
+    });
+  }
+
+  function handleRestore(backup: TripBackup) {
+    applyRestore(backup);
+  }
+
+  async function handleRestoreFile(file: File) {
+    const result = parseBackupFile(await file.text());
+    if (!result.ok) {
+      setNotice({ kind: "error", text: result.error });
+      return;
+    }
+    applyRestore(result.snapshot);
+  }
+
+  function handleDeleteBackup(backupId: string) {
+    deleteBackup(backupId);
+    setBackups(loadBackups());
   }
 
   function applyTripUpdate(updated: TripMeta) {
@@ -222,6 +311,20 @@ export function TripListClient() {
           )}
         </div>
 
+        {notice && (
+          <div
+            role="status"
+            className={`mt-5 flex items-start justify-between gap-3 rounded-xl px-3.5 py-2.5 text-sm ${
+              notice.kind === "ok" ? "bg-brand-green-50 text-brand-green-800" : "bg-red-50 text-red-800"
+            }`}
+          >
+            <p>{notice.text}</p>
+            <button onClick={() => setNotice(null)} aria-label="Dismiss" className="shrink-0 text-slate-400 hover:text-slate-600">
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="mt-7 space-y-3">
           {trips === null && <p className="text-sm text-slate-400">Loading…</p>}
 
@@ -233,6 +336,8 @@ export function TripListClient() {
               onChangeDates={handleChangeDates}
               onChangePhoto={handleChangePhoto}
               onDuplicate={handleDuplicate}
+              onBackupNow={handleBackupNow}
+              onDownloadBackup={handleDownloadBackup}
               onDelete={handleDelete}
             />
           ))}
@@ -250,6 +355,15 @@ export function TripListClient() {
             </button>
           )}
         </div>
+
+        <BackupsSection
+          backups={backups}
+          existingTripIds={new Set((trips ?? []).map((t) => t.id))}
+          openSignal={backupsOpenSignal}
+          onRestore={handleRestore}
+          onDeleteBackup={handleDeleteBackup}
+          onRestoreFile={(file) => void handleRestoreFile(file)}
+        />
       </div>
     </main>
   );
@@ -261,6 +375,8 @@ function TripRow({
   onChangeDates,
   onChangePhoto,
   onDuplicate,
+  onBackupNow,
+  onDownloadBackup,
   onDelete,
 }: {
   trip: TripMeta;
@@ -268,9 +384,11 @@ function TripRow({
   onChangeDates: (id: string, startDate: string, endDate: string) => void;
   onChangePhoto: (id: string, heroImage: string, heroCaption: string) => void;
   onDuplicate: (trip: TripMeta) => void;
+  onBackupNow: (id: string) => void;
+  onDownloadBackup: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
-  const [editing, setEditing] = useState<"name" | "dates" | "photo" | null>(null);
+  const [editing, setEditing] = useState<"name" | "dates" | "photo" | "backup" | "delete" | null>(null);
   const fixedDurationDays = trip.sourceContent === "colorado-seed" ? diffDays(trip.endDate, trip.startDate) : null;
 
   return (
@@ -310,6 +428,13 @@ function TripRow({
           🖼️
         </button>
         <button
+          onClick={() => setEditing(editing === "backup" ? null : "backup")}
+          aria-label={`Back up ${trip.name}`}
+          className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+        >
+          💾
+        </button>
+        <button
           onClick={() => onDuplicate(trip)}
           aria-label={`Duplicate ${trip.name}`}
           className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
@@ -317,7 +442,7 @@ function TripRow({
           ⧉
         </button>
         <button
-          onClick={() => onDelete(trip.id)}
+          onClick={() => setEditing(editing === "delete" ? null : "delete")}
           aria-label={`Delete ${trip.name}`}
           className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
         >
@@ -344,6 +469,25 @@ function TripRow({
           onSave={(startDate, endDate) => {
             onChangeDates(trip.id, startDate, endDate);
             setEditing(null);
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      )}
+
+      {editing === "backup" && (
+        <TripBackupPanel
+          onBackupNow={() => onBackupNow(trip.id)}
+          onDownload={() => onDownloadBackup(trip.id)}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
+      {editing === "delete" && (
+        <DeleteTripConfirm
+          tripName={trip.name}
+          onConfirm={() => {
+            setEditing(null);
+            onDelete(trip.id);
           }}
           onCancel={() => setEditing(null)}
         />
