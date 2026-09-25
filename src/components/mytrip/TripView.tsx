@@ -8,6 +8,7 @@ import { EditNoteForm } from "@/components/mytrip/EditNoteForm";
 import { EditTimeForm } from "@/components/mytrip/EditTimeForm";
 import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
 import { FlightStatusPanel } from "@/components/mytrip/FlightStatusPanel";
+import { EditDayRouteForm } from "@/components/mytrip/EditDayRouteForm";
 import { PhotoSearchForm } from "@/components/mytrip/PhotoSearchForm";
 import { Chevron } from "@/components/ui/Chevron";
 import { DemoBadge } from "@/components/ui/DemoBadge";
@@ -638,6 +639,18 @@ export function TripView({
     });
   }
 
+  /** Day-level entries use the key `day${index}` — same position-based scheme as stop ids, so a date shift doesn't orphan the link. */
+  function editDayRoute(dayIndex: number, routeUrl: string | null) {
+    const id = `day${dayIndex}`;
+    setOverrides((prev) => {
+      const next = { ...prev, [id]: { ...prev[id], routeUrl } };
+      saveStopOverrides(trip.id, next);
+      overridesRef.current = next;
+      void pushToCloud(customStopsRef.current, next);
+      return next;
+    });
+  }
+
   function handlePhotoEdit(ref: NoteRef, photoUrl: string, photoCaption: string) {
     if (ref.kind === "static") editStaticPhoto(ref.id, photoUrl, photoCaption);
     else editCustomStopPhoto(ref.customId, photoUrl, photoCaption);
@@ -772,11 +785,13 @@ export function TripView({
         )}
 
         <div className="mt-8 space-y-5">
-          {daysWithStops.map(({ day, stops }) => (
+          {daysWithStops.map(({ day, stops }, dayIndex) => (
             <DaySection
               key={day.date}
               day={day}
               stops={stops}
+              routeUrl={overrides[`day${dayIndex}`]?.routeUrl ?? null}
+              onEditRoute={(url) => editDayRoute(dayIndex, url)}
               isActive={day.date === activeDate}
               currentStopId={phase === "during" ? current?.stop.id : undefined}
               weatherEntries={day.weatherLocations.map((loc) => ({
@@ -894,6 +909,8 @@ function DaySection({
   tripStartDate,
   tripEndDate,
   timezoneLabel,
+  routeUrl,
+  onEditRoute,
   onAddStop,
   onRemoveStop,
   onEditStop,
@@ -903,6 +920,8 @@ function DaySection({
 }: {
   day: TripDay;
   stops: DisplayStop[];
+  routeUrl: string | null;
+  onEditRoute: (url: string | null) => void;
   isActive: boolean;
   currentStopId?: string;
   weatherEntries: { name: string; weather: WeatherCondition | null }[];
@@ -925,6 +944,7 @@ function DaySection({
   const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
   const [checkingWeatherId, setCheckingWeatherId] = useState<string | null>(null);
   const [checkingFlightId, setCheckingFlightId] = useState<string | null>(null);
+  const [editingRoute, setEditingRoute] = useState(false);
   useEffect(() => {
     if (isActive) setOpen(true);
   }, [isActive]);
@@ -950,6 +970,53 @@ function DaySection({
             <WeatherChip key={entry.name} name={entry.name} weather={entry.weather} usingMockWeather={usingMockWeather} />
           ))}
         </div>
+      )}
+
+      <div className={`flex flex-wrap items-center gap-1.5 px-4 pb-4 ${weatherEntries.length > 0 ? "" : "-mt-2"}`}>
+        {routeUrl ? (
+          <>
+            <a
+              href={routeUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="whitespace-nowrap rounded-full bg-brand-blue-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-brand-blue-600 active:scale-95"
+            >
+              🗺️ Day route in Google Maps
+            </a>
+            <button
+              onClick={() => setEditingRoute((v) => !v)}
+              aria-label="Edit the day's Google Maps link"
+              className="rounded-full p-1.5 text-xs text-slate-400 transition-colors hover:bg-slate-100 hover:text-brand-blue-600"
+            >
+              ✏️
+            </button>
+            <button
+              onClick={() => onEditRoute(null)}
+              aria-label="Remove the day's Google Maps link"
+              className="rounded-full p-1.5 text-xs text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
+            >
+              🗑️
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => setEditingRoute((v) => !v)}
+            className="whitespace-nowrap rounded-full border border-dashed border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-500 transition-all hover:border-brand-blue-400 hover:text-brand-blue-600 active:scale-95"
+          >
+            🗺️ Add day route link
+          </button>
+        )}
+      </div>
+
+      {editingRoute && (
+        <EditDayRouteForm
+          initialUrl={routeUrl ?? ""}
+          onSave={(url) => {
+            onEditRoute(url);
+            setEditingRoute(false);
+          }}
+          onCancel={() => setEditingRoute(false)}
+        />
       )}
 
       {open && (

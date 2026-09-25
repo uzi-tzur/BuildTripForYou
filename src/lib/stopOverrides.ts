@@ -19,6 +19,27 @@ export interface StopOverride {
   deleted?: boolean;
   photoUrl?: string | null;
   photoCaption?: string | null;
+  /**
+   * Only used on a day-level entry (key `day${dayIndex}`, not a stop id): a
+   * Google Maps directions link the user pasted for that whole day. Stored
+   * here so it syncs through the existing per-trip overrides with no schema change.
+   */
+  routeUrl?: string | null;
+}
+
+/** Google Maps links only — this is rendered as a clickable href, so anything else (e.g. a javascript: URL) is refused. */
+export function isValidGoogleMapsUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:") return false;
+    const host = url.hostname.toLowerCase();
+    if (host === "maps.app.goo.gl" || host === "maps.google.com") return true;
+    // On general Google/short-link hosts, only the maps paths — not e.g. google.com/url?q=… redirects.
+    const isGoogleHost = host === "google.com" || host.endsWith(".google.com") || host === "goo.gl";
+    return isGoogleHost && url.pathname.startsWith("/maps");
+  } catch {
+    return false;
+  }
 }
 
 function storageKey(tripId: string): string {
