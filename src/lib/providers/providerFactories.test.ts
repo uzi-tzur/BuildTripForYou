@@ -12,7 +12,6 @@ import { GooglePlacesProvider } from "@/lib/providers/places/googlePlaces";
 import { MockImageProvider } from "@/lib/providers/images/mockImages";
 import { PexelsImageProvider } from "@/lib/providers/images/pexelsImages";
 import { getFlightProvider } from "@/lib/providers/flights";
-import { MockFlightProvider } from "@/lib/providers/flights/mockFlights";
 import { AviationStackProvider } from "@/lib/providers/flights/aviationStack";
 
 const originalEnv = { ...process.env };
@@ -54,26 +53,15 @@ describe("provider factories — PRD Rule 4 (never hard-code a provider)", () =>
     expect(getImageProvider()).toBeInstanceOf(PexelsImageProvider);
   });
 
-  it("flights: falls back to the mock provider with no API key, real adapter once one is set", () => {
+  it("flights: has NO mock fallback (never fabricate a flight status) — null without a key, real adapter once one is set", () => {
     delete process.env.AVIATIONSTACK_API_KEY;
-    expect(getFlightProvider()).toBeInstanceOf(MockFlightProvider);
+    expect(getFlightProvider()).toBeNull();
 
     process.env.AVIATIONSTACK_API_KEY = "test-key";
     expect(getFlightProvider()).toBeInstanceOf(AviationStackProvider);
   });
 });
 
-describe("MockFlightProvider", () => {
-  it("tags mock data with provider 'mock' (PRD Rule 5 demo badge) and is deterministic per flight number", async () => {
-    const provider = new MockFlightProvider();
-    const a = await provider.getStatus({ flightNumber: "AA1523" });
-    const b = await provider.getStatus({ flightNumber: "aa 1523" });
-    expect(a?.provider).toBe("mock");
-    expect(a?.flightNumber).toBe("AA1523");
-    expect(a?.status).toBe(b?.status);
-    expect(a?.departureGate).toBe(b?.departureGate);
-  });
-});
 
 describe("MockImageProvider", () => {
   it("tags mock data with provider 'mock' (PRD Rule 5 demo badge) and returns usable results", async () => {

@@ -1,11 +1,46 @@
+import type { FlightStatusResult } from "@/lib/providers/flights";
+
 /**
- * Rule-based "will this delay hurt my plans?" check for a flight — no model
- * involved: if the flight is late enough, any activity scheduled between
- * takeoff and the *new* landing time can't happen when planned, so each one
- * is proposed to move back by the same delay. The user always approves the
- * change; nothing is rescheduled automatically.
+ * The rule-based "flight status agent" — no model involved, each stage is a
+ * plain function so it's testable and predictable:
+ *
+ *   status -> assessDisruption()        is the flight actually disrupted?
+ *          -> proposeDelayChanges()     which planned activities does it collide with?
+ *          -> banner (FlightDelayBanner) suggest a fix, ask the user
+ *          -> user accepts              only then are the itinerary's times edited
+ *
+ * Nothing here ever changes the itinerary; it only produces proposals.
  */
 export const IMPACT_THRESHOLD_MINUTES = 30;
+/** Below this a delay is noise, not a disruption worth mentioning. */
+export const DELAY_NOTICE_MINUTES = 15;
+
+export type Disruption =
+  | { kind: "none" }
+  | { kind: "delay"; delayMinutes: number }
+  | { kind: "cancelled" }
+  | { kind: "diverted" };
+
+function wallClockDiffMinutes(later: string | null, earlier: string | null): number | null {
+  if (!later || !earlier) return null;
+  return Math.round((Date.parse(`${later.slice(0, 16)}:00Z`) - Date.parse(`${earlier.slice(0, 16)}:00Z`)) / 60_000);
+}
+
+/** Uses only what the provider reported; never guesses a delay it wasn't given. */
+export function assessDisruption(status: FlightStatusResult): Disruption {
+  if (status.status === "cancelled") return { kind: "cancelled" };
+  if (status.status === "diverted" || status.status === "incident") return { kind: "diverted" };
+  if (status.status === "landed") return { kind: "none" };
+
+  // Arrival delay is what collides with plans made for after landing; fall back to departure delay when only that is known.
+  const delay =
+    status.arrival.delayMinutes ??
+    wallClockDiffMinutes(status.arrival.estimated, status.arrival.scheduled) ??
+    status.departure.delayMinutes ??
+    wallClockDiffMinutes(status.departure.estimated, status.departure.scheduled) ??
+    0;
+  return delay >= DELAY_NOTICE_MINUTES ? { kind: "delay", delayMinutes: delay } : { kind: "none" };
+}
 
 export interface ImpactCandidate {
   id: string;
@@ -43,8 +78,8 @@ export function shiftIsoMinutes(iso: string, minutes: number): string {
 export function proposeDelayChanges(input: {
   /** The flight's scheduled departure (ISO with offset). */
   departureIso: string;
-  /** Scheduled landing as a time of day with the arrival airport's offset, e.g. "08:10:00-06:00" — same date as departure. */
-  arrivalClock: string;
+  /** Scheduled landing (ISO with the arrival airport's offset). */
+  arrivalIso: string;
   delayMinutes: number;
   /** Every other timed stop in the trip; the flight itself must not be included. */
   stops: ImpactCandidate[];
@@ -52,7 +87,7 @@ export function proposeDelayChanges(input: {
   if (input.delayMinutes < IMPACT_THRESHOLD_MINUTES) return [];
 
   const departureMs = Date.parse(input.departureIso);
-  const scheduledArrivalMs = Date.parse(`${input.departureIso.slice(0, 10)}T${input.arrivalClock}`);
+  const scheduledArrivalMs = Date.parse(input.arrivalIso);
   if (Number.isNaN(departureMs) || Number.isNaN(scheduledArrivalMs)) return [];
   const newArrivalMs = scheduledArrivalMs + input.delayMinutes * 60_000;
 

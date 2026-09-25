@@ -10,6 +10,7 @@ import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
 import { FlightDelayBanner } from "@/components/mytrip/FlightDelayBanner";
 import { FlightStatusPanel } from "@/components/mytrip/FlightStatusPanel";
 import { formatWallClock, proposeDelayChanges } from "@/lib/flightImpact";
+import { buildFlight, flightLabel, flightRoute, type Flight } from "@/lib/flights";
 import { EditDayRouteForm } from "@/components/mytrip/EditDayRouteForm";
 import { PhotoSearchForm } from "@/components/mytrip/PhotoSearchForm";
 import { Chevron } from "@/components/ui/Chevron";
@@ -113,37 +114,9 @@ interface DisplayStop {
   noteEditable: NoteRef;
 }
 
-/** What a flight-status check needs for a stop — an itinerary flight, or a custom Airport activity with a flight number. Null for anything else. */
-function flightLookup(stop: DisplayStop): {
-  flightNumber: string;
-  airport: string | null;
-  airline: string | null;
-  arrivalAirport: string | null;
-  arrivalClock: string | null;
-} | null {
-  if (stop.flight) {
-    return {
-      flightNumber: `${stop.flight.airline}${stop.flight.flightNumber}`,
-      airport: stop.flight.departureAirport,
-      airline: stop.flight.airline,
-      arrivalAirport: stop.flight.arrivalAirport,
-      arrivalClock: stop.flight.arrivalClock,
-    };
-  }
-  if (stop.custom?.flightNumber) {
-    const raw = stop.custom.flightNumber.replace(/\s+/g, "");
-    const airlineCode = stop.custom.airline?.trim() ?? "";
-    // Lookups are keyed on the combined code ("AA1523"); a bare number plus a 2-character airline code is the same thing.
-    const combined = /^\d{1,4}$/.test(raw) && /^[A-Za-z0-9]{2}$/.test(airlineCode) ? `${airlineCode.toUpperCase()}${raw}` : raw;
-    return {
-      flightNumber: combined,
-      airport: stop.custom.airport ?? null,
-      airline: stop.custom.airline ?? null,
-      arrivalAirport: null,
-      arrivalClock: null,
-    };
-  }
-  return null;
+/** The stop as a Flight (see src/lib/flights.ts), or null if it isn't one. Uses the stop's effective date/time, so a user's edits are respected. */
+function flightOf(stop: DisplayStop): Flight | null {
+  return buildFlight({ date: stop.editable.date, time: stop.time, flight: stop.flight, custom: stop.custom });
 }
 
 /** Flights get checked automatically from a day before departure until a few hours after. */
@@ -1082,10 +1055,10 @@ function DaySection({
                 const isEditingTitle = editingTitleId === stop.id;
                 const isEditingPhoto = editingPhotoId === stop.id;
                 const isCheckingWeather = checkingWeatherId === stop.id;
-                const flightInfo = flightLookup(stop);
-                const autoCheckFlight = flightInfo !== null && isInFlightCheckWindow(stop.time, now);
+                const flight = flightOf(stop);
+                const autoCheckFlight = flight !== null && isInFlightCheckWindow(flight.scheduledDeparture, now);
                 const isCheckingFlight = checkingFlightId === stop.id;
-                const showFlightPanel = flightInfo !== null && (isCheckingFlight || autoCheckFlight);
+                const showFlightPanel = flight !== null && (isCheckingFlight || autoCheckFlight);
                 return (
                   <li
                     key={stop.id}
@@ -1171,33 +1144,37 @@ function DaySection({
                           </div>
                         )}
 
-                        {stop.custom?.flightNumber && (
-                          <p className="mt-1 text-sm text-slate-500">
-                            ✈️ {stop.custom.flightNumber}
-                            {stop.custom.airline && ` · ${stop.custom.airline}`}
-                            {stop.custom.airport && ` · ${stop.custom.airport}`}
+                        {flight && (
+                          <p className="mt-1 text-sm text-slate-600">
+                            {flight.scheduledDeparture && `${formatWallClock(flight.scheduledDeparture)} · `}
+                            <span className="font-semibold">{flightLabel(flight)}</span>
+                            {flightRoute(flight) && (
+                              <>
+                                <br />✈️ {flightRoute(flight)}
+                              </>
+                            )}
                           </p>
                         )}
-                        {showFlightPanel && flightInfo && (
+                        {showFlightPanel && flight && (
                           <FlightStatusPanel
-                            flightNumber={flightInfo.flightNumber}
-                            airport={flightInfo.airport}
-                            airline={flightInfo.airline}
-                            arrivalAirport={flightInfo.arrivalAirport}
-                            departureIso={stop.time}
+                            flight={flight}
                             impact={
-                              flightInfo.arrivalClock && stop.time
-                                ? (delayMinutes) => {
-                                    const changes = proposeDelayChanges({
-                                      departureIso: stop.time!,
-                                      arrivalClock: flightInfo.arrivalClock!,
-                                      delayMinutes,
-                                      stops: stops.filter((s) => s.id !== stop.id).map((s) => ({ id: s.id, title: s.title, time: s.time })),
-                                    });
+                              flight.scheduledDeparture && flight.scheduledArrival
+                                ? (disruption) => {
+                                    // Only a delay has time-based proposals; a cancellation or diversion just gets a notice.
+                                    const changes =
+                                      disruption.kind === "delay"
+                                        ? proposeDelayChanges({
+                                            departureIso: flight.scheduledDeparture!,
+                                            arrivalIso: flight.scheduledArrival!,
+                                            delayMinutes: disruption.delayMinutes,
+                                            stops: stops.filter((s) => s.id !== stop.id).map((s) => ({ id: s.id, title: s.title, time: s.time })),
+                                          })
+                                        : [];
                                     return (
                                       <FlightDelayBanner
-                                        flightNumber={flightInfo.flightNumber}
-                                        delayMinutes={delayMinutes}
+                                        flightLabel={flightLabel(flight)}
+                                        disruption={disruption}
                                         changes={changes}
                                         onAccept={(accepted) => {
                                           for (const change of accepted) {
@@ -1274,7 +1251,7 @@ function DaySection({
                               🌦️ {isCheckingWeather ? "Hide Weather" : "Check Weather"}
                             </button>
                           )}
-                          {flightInfo && !autoCheckFlight && (
+                          {flight && !autoCheckFlight && (
                             <button
                               onClick={() => setCheckingFlightId(isCheckingFlight ? null : stop.id)}
                               className="whitespace-nowrap rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-all hover:border-sky-300 hover:text-sky-700 active:scale-95"
