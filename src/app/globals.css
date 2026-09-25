@@ -9,3 +9,31 @@ html {
 body {
   @apply bg-white text-slate-900;
 }
+
+/*
+ * Itinerary export (src/components/mytrip/ItineraryExport.tsx): when printing
+ * or saving as PDF, show only the itinerary document — not the trip page
+ * behind it or the export toolbar.
+ */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  body > *:not(.itinerary-print-root) {
+    display: none !important;
+  }
+
+  .itinerary-print-root {
+    position: static !important;
+    overflow: visible !important;
+    background: #fff !important;
+    padding: 0 !important;
+  }
+
+  .itinerary-doc,
+  .itinerary-doc * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

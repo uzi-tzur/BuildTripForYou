@@ -7,9 +7,12 @@ import { AddActivityForm } from "@/components/mytrip/AddActivityForm";
 import { EditNoteForm } from "@/components/mytrip/EditNoteForm";
 import { EditTimeForm } from "@/components/mytrip/EditTimeForm";
 import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
+import { ItineraryExport } from "@/components/mytrip/ItineraryExport";
 import { FlightDelayBanner } from "@/components/mytrip/FlightDelayBanner";
 import { FlightStatusPanel } from "@/components/mytrip/FlightStatusPanel";
+import type { ItineraryInput } from "@/lib/itinerary";
 import { formatWallClock, proposeDelayChanges } from "@/lib/flightImpact";
+import { rainWindowLabel } from "@/lib/weatherLabels";
 import { buildFlight, flightLabel, flightRoute, type Flight } from "@/lib/flights";
 import { EditDayRouteForm } from "@/components/mytrip/EditDayRouteForm";
 import { PhotoSearchForm } from "@/components/mytrip/PhotoSearchForm";
@@ -90,6 +93,8 @@ interface DisplayStop {
   time: string | null; // ISO with offset
   timeLabel: string;
   icon: string;
+  /** What sort of stop this is: an itinerary StopKind, a custom category, or "end" for the auto-added end-of-span entry. */
+  kind: string;
   title: string;
   /** The renamable title without any display-only prefix (e.g. a custom stop's "Return: " label) — what the rename form edits. */
   baseTitle: string;
@@ -183,6 +188,7 @@ function staticRefToDisplay(
       time,
       timeLabel,
       icon: KIND_ICON[stop.kind],
+      kind: stop.kind,
       title: override?.title ?? stop.title,
       baseTitle: override?.title ?? stop.title,
       description: stop.description,
@@ -222,6 +228,7 @@ function customToDisplayEntries(
         time: stop.time ? customStopToIso(stop.date, stop.time, utcOffset) : null,
         timeLabel: stop.time ? formatTripTime(customStopToIso(stop.date, stop.time, utcOffset), timezoneLabel) : "Time not set",
         icon: CUSTOM_STOP_CATEGORY_ICON[stop.category],
+        kind: stop.category,
         title: stop.title,
         baseTitle: stop.title,
         address: stop.address,
@@ -246,6 +253,7 @@ function customToDisplayEntries(
           ? formatTripTime(customStopToIso(stop.endDate, stop.endTime, utcOffset), timezoneLabel)
           : "Time not set",
         icon: CUSTOM_STOP_CATEGORY_ICON[stop.category],
+        kind: "end",
         title: `${CUSTOM_STOP_END_LABEL[stop.category]}: ${stop.title}`,
         baseTitle: stop.title,
         address: stop.address,
@@ -443,6 +451,7 @@ export function TripView({
   const [customStops, setCustomStops] = useState<CustomStop[]>([]);
   const [overrides, setOverrides] = useState<Record<string, StopOverride>>({});
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
+  const [exporting, setExporting] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const customStopsRef = useRef<CustomStop[]>([]);
   const overridesRef = useRef<Record<string, StopOverride>>({});
@@ -726,6 +735,45 @@ export function TripView({
     }
   }
 
+  /** The trip as the export needs it: what's on screen right now, including the user's edits and additions. */
+  function buildItineraryInput(): ItineraryInput {
+    return {
+      trip: {
+        name: trip.name,
+        subtitle: trip.subtitle,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        heroImage: trip.heroImage,
+        heroCaption: trip.heroCaption,
+      },
+      weatherIsEstimate: usingMockWeather,
+      days: daysWithStops.map(({ day, stops }, dayIndex) => ({
+        dayLabel: day.dayLabel,
+        title: day.title,
+        routeUrl: overrides[`day${dayIndex}`]?.routeUrl ?? null,
+        weather: day.weatherLocations.map((loc) => ({ name: loc.name, weather: weatherByKey[weatherKey(day.date, loc.name)] ?? null })),
+        stops: stops.map((stop) => ({
+          id: stop.id,
+          title: stop.title,
+          timeLabel: stop.timeLabel,
+          icon: stop.icon,
+          kind: stop.kind,
+          description: stop.description,
+          address: stop.address,
+          phone: stop.phone,
+          confirmation: stop.confirmation,
+          cost: stop.cost,
+          tip: stop.tip,
+          warning: stop.warning,
+          personalNote: stop.personalNote,
+          photoUrl: stop.photoUrl,
+          photoCaption: stop.photoCaption,
+          flight: flightOf(stop),
+        })),
+      })),
+    };
+  }
+
   const daysUntil = now && timed.length > 0 ? daysUntilDate(trip.startDate, now) : null;
 
   return (
@@ -772,6 +820,12 @@ export function TripView({
       <div className="px-4 sm:px-6">
         <SyncIndicator status={syncStatus} lastSyncedAt={lastSyncedAt} onSync={() => void manualSync()} />
         <WeatherSyncRow updatedAt={weatherUpdatedAt} onRefresh={onRefreshWeather} />
+        <button
+          onClick={() => setExporting(true)}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:border-brand-blue-300 hover:text-brand-blue-700 active:scale-[0.99]"
+        >
+          📄 Export &amp; share itinerary
+        </button>
         {trip.subtitle && <p className="mt-3 text-[15px] leading-relaxed text-slate-600">{trip.subtitle}</p>}
 
         {phase === "before" && daysUntil !== null && (
@@ -836,6 +890,7 @@ export function TripView({
           ))}
         </div>
       </div>
+      {exporting && <ItineraryExport input={buildItineraryInput()} onClose={() => setExporting(false)} />}
     </main>
   );
 }
@@ -853,28 +908,6 @@ function StopSummary({ label, stop }: { label: string; stop: DisplayStop }) {
       </div>
     </div>
   );
-}
-
-/** How high a chance has to be before a time window counts as "likely to rain". */
-const RAIN_LIKELY_THRESHOLD = 30;
-
-function formatHour(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", timeZone: "America/Denver" });
-}
-
-/**
- * Picks out the forecast intervals with a meaningful rain chance and
- * describes them as a time range, e.g. "2–5 PM" — or "2 PM" if only one
- * interval clears the threshold. Returns null when nothing in the day is
- * likely enough to call out.
- */
-function rainWindowLabel(windows: { time: string; chance: number }[] | null): string | null {
-  if (!windows) return null;
-  const likely = windows.filter((w) => w.chance >= RAIN_LIKELY_THRESHOLD).sort((a, b) => a.time.localeCompare(b.time));
-  if (likely.length === 0) return null;
-  const start = formatHour(likely[0]!.time);
-  const end = formatHour(likely[likely.length - 1]!.time);
-  return start === end ? start : `${start}–${end}`;
 }
 
 /** Daily low/high and precipitation chance for one named place. */
