@@ -1,3 +1,4 @@
+import { formatDateUS } from "@/lib/format";
 import {
   FlightLookupError,
   type FlightLegStatus,
@@ -125,16 +126,18 @@ export class AviationStackProvider implements FlightProvider {
       throw new FlightLookupError("flight_not_found", `No flight ${flightNumber} was found.`);
     }
 
+    // Messages show the date the way the rest of the app does (MM-DD-YYYY); the request itself stays YYYY-MM-DD.
+    const displayDate = formatDateUS(request.flightDate);
     const onDate = all.filter((f) => f.flight_date === request.flightDate);
     if (onDate.length === 0) {
       const today = new Date().toISOString().slice(0, 10);
       if (request.flightDate > today) {
         throw new FlightLookupError(
           "not_yet_available",
-          `Live status for ${flightNumber} on ${request.flightDate} isn't available yet — check again closer to departure.`,
+          `Live status for ${flightNumber} on ${displayDate} isn't available yet — check again closer to departure.`,
         );
       }
-      throw new FlightLookupError("no_live_status", `Live status for ${flightNumber} on ${request.flightDate} is no longer available.`);
+      throw new FlightLookupError("no_live_status", `Live status for ${flightNumber} on ${displayDate} is no longer available.`);
     }
 
     // A codeshare listing is the same aircraft sold under another airline's code — prefer the operating flight's own record.
@@ -146,7 +149,7 @@ export class AviationStackProvider implements FlightProvider {
     );
     if (onRoute.length === 0) {
       const wanted = [request.departureAirport, request.arrivalAirport].filter(Boolean).join(" → ");
-      throw new FlightLookupError("flight_not_found", `${flightNumber} on ${request.flightDate} isn't listed for ${wanted}.`);
+      throw new FlightLookupError("flight_not_found", `${flightNumber} on ${displayDate} isn't listed for ${wanted}.`);
     }
 
     const distinct = new Map(onRoute.map((f) => [`${routeLabel(f)}|${f.departure?.scheduled ?? ""}`, f]));
@@ -154,7 +157,7 @@ export class AviationStackProvider implements FlightProvider {
       const routes = [...distinct.values()].map(routeLabel).join(", ");
       throw new FlightLookupError(
         "ambiguous_flight",
-        `${flightNumber} has more than one flight on ${request.flightDate} (${routes}) — add the airports to pick one.`,
+        `${flightNumber} has more than one flight on ${displayDate} (${routes}) — add the airports to pick one.`,
       );
     }
     const flight = [...distinct.values()][0]!;

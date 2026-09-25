@@ -70,6 +70,14 @@ describe("AviationStackProvider", () => {
     expect(await codeOf(new AviationStackProvider().getStatus(REQUEST))).toBe("not_yet_available");
   });
 
+  it("writes dates in messages as MM-DD-YYYY", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-20T12:00:00Z"));
+    respond({ data: [entry({ flight_date: "2026-09-20" })] });
+    const error = await new AviationStackProvider().getStatus(REQUEST).catch((e: unknown) => e);
+    expect((error as Error).message).toBe("Live status for AA1523 on 09-27-2026 isn't available yet — check again closer to departure.");
+  });
+
   it("reports no_live_status for a past date it no longer has", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-05T12:00:00Z"));
