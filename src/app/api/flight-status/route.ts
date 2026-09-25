@@ -12,6 +12,8 @@ export async function POST(request: Request) {
     flightNumber?: string;
     airport?: string | null;
     airline?: string | null;
+    departureDate?: string | null;
+    departureTime?: string | null;
   };
   const flightNumber = body.flightNumber?.trim();
 
@@ -26,6 +28,8 @@ export async function POST(request: Request) {
       flightNumber,
       airport: body.airport ?? null,
       airline: body.airline ?? null,
+      departureDate: body.departureDate ?? null,
+      departureTime: body.departureTime ?? null,
     });
     return NextResponse.json({ status, usingMockFlightStatus });
   } catch {

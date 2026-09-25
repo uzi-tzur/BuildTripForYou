@@ -29,6 +29,22 @@ export interface TripStop {
    * `name` in that day's weatherLocations.
    */
   weatherLocationName?: string;
+  /** Set on an actual flight (not the "Land in …" marker) — what a live flight-status lookup is keyed on. */
+  flight?: FlightInfo;
+}
+
+export interface FlightInfo {
+  airline: string; // IATA code, e.g. "AA"
+  flightNumber: string; // digits, e.g. "1523"
+  departureAirport: string;
+  arrivalAirport: string;
+  /**
+   * Scheduled landing as a time of day with the arrival airport's UTC offset
+   * ("08:10:00-06:00"). Same calendar date as the departure — kept as a
+   * clock rather than a full timestamp so it doesn't need shifting when the
+   * trip's dates move.
+   */
+  arrivalClock: string;
 }
 
 export interface TripDay {
@@ -73,6 +89,7 @@ export const COLORADO_TRIP_DAYS: TripDay[] = [
         title: "Flight AA 1523 — DFW → DEN",
         kind: "flight",
         confirmation: "Confirmation code: SBLIQA",
+        flight: { airline: "AA", flightNumber: "1523", departureAirport: "DFW", arrivalAirport: "DEN", arrivalClock: "08:10:00-06:00" },
       },
       {
         time: "2026-09-27T08:10:00-06:00",
@@ -257,6 +274,7 @@ export const COLORADO_TRIP_DAYS: TripDay[] = [
         timeLabel: "1:17 PM (Denver time)",
         title: "Flight AA 2359 — DEN → DFW",
         kind: "flight",
+        flight: { airline: "AA", flightNumber: "2359", departureAirport: "DEN", arrivalAirport: "DFW", arrivalClock: "16:29:00-05:00" },
       },
       {
         time: "2026-09-30T16:29:00-05:00",

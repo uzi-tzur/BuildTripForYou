@@ -7,12 +7,14 @@ import { AddActivityForm } from "@/components/mytrip/AddActivityForm";
 import { EditNoteForm } from "@/components/mytrip/EditNoteForm";
 import { EditTimeForm } from "@/components/mytrip/EditTimeForm";
 import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
+import { FlightDelayBanner } from "@/components/mytrip/FlightDelayBanner";
 import { FlightStatusPanel } from "@/components/mytrip/FlightStatusPanel";
+import { formatWallClock, proposeDelayChanges } from "@/lib/flightImpact";
 import { EditDayRouteForm } from "@/components/mytrip/EditDayRouteForm";
 import { PhotoSearchForm } from "@/components/mytrip/PhotoSearchForm";
 import { Chevron } from "@/components/ui/Chevron";
 import { DemoBadge } from "@/components/ui/DemoBadge";
-import type { TripDay, TripStop } from "@/data/coloradoTrip";
+import type { FlightInfo, TripDay, TripStop } from "@/data/coloradoTrip";
 import {
   CUSTOM_STOP_CATEGORY_ICON,
   CUSTOM_STOP_END_LABEL,
@@ -104,9 +106,52 @@ interface DisplayStop {
   photoCaption?: string | null;
   /** Matches a name in the day's weatherLocations — set only on outdoor/town stops. */
   weatherLocationName?: string;
+  /** Set only on an itinerary flight — see flightLookup for how a flight is resolved for status checks. */
+  flight?: FlightInfo;
   custom?: CustomStop;
   editable: EditRef;
   noteEditable: NoteRef;
+}
+
+/** What a flight-status check needs for a stop — an itinerary flight, or a custom Airport activity with a flight number. Null for anything else. */
+function flightLookup(stop: DisplayStop): {
+  flightNumber: string;
+  airport: string | null;
+  airline: string | null;
+  arrivalAirport: string | null;
+  arrivalClock: string | null;
+} | null {
+  if (stop.flight) {
+    return {
+      flightNumber: `${stop.flight.airline}${stop.flight.flightNumber}`,
+      airport: stop.flight.departureAirport,
+      airline: stop.flight.airline,
+      arrivalAirport: stop.flight.arrivalAirport,
+      arrivalClock: stop.flight.arrivalClock,
+    };
+  }
+  if (stop.custom?.flightNumber) {
+    const raw = stop.custom.flightNumber.replace(/\s+/g, "");
+    const airlineCode = stop.custom.airline?.trim() ?? "";
+    // Lookups are keyed on the combined code ("AA1523"); a bare number plus a 2-character airline code is the same thing.
+    const combined = /^\d{1,4}$/.test(raw) && /^[A-Za-z0-9]{2}$/.test(airlineCode) ? `${airlineCode.toUpperCase()}${raw}` : raw;
+    return {
+      flightNumber: combined,
+      airport: stop.custom.airport ?? null,
+      airline: stop.custom.airline ?? null,
+      arrivalAirport: null,
+      arrivalClock: null,
+    };
+  }
+  return null;
+}
+
+/** Flights get checked automatically from a day before departure until a few hours after. */
+function isInFlightCheckWindow(departureIso: string | null, now: Date | null): boolean {
+  if (!departureIso || !now) return false;
+  const departureMs = Date.parse(departureIso);
+  if (Number.isNaN(departureMs)) return false;
+  return now.getTime() >= departureMs - 24 * 3_600_000 && now.getTime() <= departureMs + 6 * 3_600_000;
 }
 
 interface StaticStopRef {
@@ -148,7 +193,11 @@ function staticRefToDisplay(
   if (hasTimeOverride) {
     const offset = extractUtcOffset(stop.time);
     time = override!.time ? `${effectiveDate}T${override!.time}:00${offset}` : null;
-    timeLabel = time ? formatTripTime(time, timezoneLabel) : "Time not set";
+    // The edited time is a wall-clock time in the stop's own zone (a Dallas stop stays Dallas time),
+    // so label it with the digits as entered and the zone from the original label — converting it
+    // to Denver time would shift Dallas stops by an hour.
+    const zoneLabel = (stop.timeLabel.match(/\(([^)]*)\)/)?.[1] ?? timezoneLabel).replace(/,\s*estimated/i, "");
+    timeLabel = time ? `${formatWallClock(time)} (${zoneLabel})` : "Time not set";
   } else {
     time = stop.time;
     timeLabel = stop.timeLabel;
@@ -173,6 +222,7 @@ function staticRefToDisplay(
       photoUrl: override?.photoUrl ?? null,
       photoCaption: override?.photoCaption ?? null,
       weatherLocationName: stop.weatherLocationName,
+      flight: stop.flight,
       editable: { kind: "static", id: ref.id, date: effectiveDate, time: effectiveTimeHHMM },
       noteEditable: { kind: "static", id: ref.id },
     },
@@ -790,6 +840,7 @@ export function TripView({
               key={day.date}
               day={day}
               stops={stops}
+              now={now}
               routeUrl={overrides[`day${dayIndex}`]?.routeUrl ?? null}
               onEditRoute={(url) => editDayRoute(dayIndex, url)}
               isActive={day.date === activeDate}
@@ -911,6 +962,7 @@ function DaySection({
   timezoneLabel,
   routeUrl,
   onEditRoute,
+  now,
   onAddStop,
   onRemoveStop,
   onEditStop,
@@ -922,6 +974,7 @@ function DaySection({
   stops: DisplayStop[];
   routeUrl: string | null;
   onEditRoute: (url: string | null) => void;
+  now: Date | null;
   isActive: boolean;
   currentStopId?: string;
   weatherEntries: { name: string; weather: WeatherCondition | null }[];
@@ -1029,7 +1082,10 @@ function DaySection({
                 const isEditingTitle = editingTitleId === stop.id;
                 const isEditingPhoto = editingPhotoId === stop.id;
                 const isCheckingWeather = checkingWeatherId === stop.id;
+                const flightInfo = flightLookup(stop);
+                const autoCheckFlight = flightInfo !== null && isInFlightCheckWindow(stop.time, now);
                 const isCheckingFlight = checkingFlightId === stop.id;
+                const showFlightPanel = flightInfo !== null && (isCheckingFlight || autoCheckFlight);
                 return (
                   <li
                     key={stop.id}
@@ -1122,11 +1178,38 @@ function DaySection({
                             {stop.custom.airport && ` · ${stop.custom.airport}`}
                           </p>
                         )}
-                        {isCheckingFlight && stop.custom?.flightNumber && (
+                        {showFlightPanel && flightInfo && (
                           <FlightStatusPanel
-                            flightNumber={stop.custom.flightNumber}
-                            airport={stop.custom.airport ?? null}
-                            airline={stop.custom.airline ?? null}
+                            flightNumber={flightInfo.flightNumber}
+                            airport={flightInfo.airport}
+                            airline={flightInfo.airline}
+                            arrivalAirport={flightInfo.arrivalAirport}
+                            departureIso={stop.time}
+                            impact={
+                              flightInfo.arrivalClock && stop.time
+                                ? (delayMinutes) => {
+                                    const changes = proposeDelayChanges({
+                                      departureIso: stop.time!,
+                                      arrivalClock: flightInfo.arrivalClock!,
+                                      delayMinutes,
+                                      stops: stops.filter((s) => s.id !== stop.id).map((s) => ({ id: s.id, title: s.title, time: s.time })),
+                                    });
+                                    return (
+                                      <FlightDelayBanner
+                                        flightNumber={flightInfo.flightNumber}
+                                        delayMinutes={delayMinutes}
+                                        changes={changes}
+                                        onAccept={(accepted) => {
+                                          for (const change of accepted) {
+                                            const target = stops.find((s) => s.id === change.id);
+                                            if (target) onEditStop(target.editable, change.newTime.slice(0, 10), change.newTime.slice(11, 16));
+                                          }
+                                        }}
+                                      />
+                                    );
+                                  }
+                                : undefined
+                            }
                           />
                         )}
 
@@ -1191,7 +1274,7 @@ function DaySection({
                               🌦️ {isCheckingWeather ? "Hide Weather" : "Check Weather"}
                             </button>
                           )}
-                          {stop.custom?.flightNumber && (
+                          {flightInfo && !autoCheckFlight && (
                             <button
                               onClick={() => setCheckingFlightId(isCheckingFlight ? null : stop.id)}
                               className="whitespace-nowrap rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-all hover:border-sky-300 hover:text-sky-700 active:scale-95"
