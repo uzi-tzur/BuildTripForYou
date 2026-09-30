@@ -109,10 +109,22 @@ export function replaceUserTrips(trips: TripMeta[]): void {
  * means deleted — dropped from the list entirely, never surfaced.
  */
 export function withSeedTrip(userTrips: TripMeta[]): TripMeta[] {
-  const storedSeed = userTrips.find((t) => t.id === SEED_TRIP.id && t.sourceContent === "colorado-seed");
-  const others = userTrips.filter((t) => t.id !== SEED_TRIP.id && !t.hidden);
+  const trips = userTrips.map(withoutRetiredSubtitle);
+  const storedSeed = trips.find((t) => t.id === SEED_TRIP.id && t.sourceContent === "colorado-seed");
+  const others = trips.filter((t) => t.id !== SEED_TRIP.id && !t.hidden);
   const seedEntry = storedSeed ? (storedSeed.hidden ? null : storedSeed) : SEED_TRIP;
   return seedEntry ? [seedEntry, ...others] : others;
+}
+
+/**
+ * The built-in trip used to ship with this subtitle, and every saved copy
+ * of it (edited, duplicated, synced) carries the text along — so it's
+ * dropped wherever it still appears. A subtitle the user typed is kept.
+ */
+const RETIRED_SEED_SUBTITLE = "Rocky Mountain road trip — aspen gold, hot springs, and a legendary staircase.";
+
+function withoutRetiredSubtitle(trip: TripMeta): TripMeta {
+  return trip.subtitle === RETIRED_SEED_SUBTITLE ? { ...trip, subtitle: "" } : trip;
 }
 
 /** The seed trip always appears first (unless deleted), followed by whatever the user created. */

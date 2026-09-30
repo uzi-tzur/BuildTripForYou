@@ -62,7 +62,7 @@ export interface TripDay {
 
 export const TRIP_META = {
   title: "Colorado in the Fall",
-  subtitle: "Rocky Mountain road trip — aspen gold, hot springs, and a legendary staircase.",
+  subtitle: "",
   startDate: "2026-09-27",
   endDate: "2026-09-30",
 };
