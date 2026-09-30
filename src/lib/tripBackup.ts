@@ -18,6 +18,7 @@ import {
   type CustomStopCategory,
 } from "@/lib/customStops";
 import { sanitizeChecklist } from "@/lib/prepChecklist";
+import { isTripPhotoUrl } from "@/lib/tripPhotos";
 import { isValidGoogleMapsUrl, loadStopOverrides, saveStopOverrides, type StopOverride } from "@/lib/stopOverrides";
 import { loadAllTrips, restoreTrip, SEED_TRIP, type TripMeta } from "@/lib/trips";
 
@@ -143,7 +144,7 @@ function remoteImage(value: unknown): string | null {
   if (typeof value !== "string") return null;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && IMAGE_HOSTS.has(url.hostname) ? value : null;
+    return (url.protocol === "https:" && IMAGE_HOSTS.has(url.hostname)) || isTripPhotoUrl(value) ? value : null;
   } catch {
     return null;
   }

@@ -9,7 +9,7 @@ const SUPABASE_PROTECTED_PREFIXES = ["/trips"];
  * numbers, flight details) with no account behind it, gated by a shared
  * 6-digit code instead (see src/lib/accessCode.ts).
  */
-const ACCESS_CODE_PROTECTED_PREFIXES = ["/my-trip", "/api/mytrip-weather", "/api/image-search", "/api/flight-status", "/api/drive-time"];
+const ACCESS_CODE_PROTECTED_PREFIXES = ["/my-trip", "/api/mytrip-weather", "/api/image-search", "/api/flight-status", "/api/drive-time", "/api/photo-upload"];
 
 function matchesPrefix(pathname: string, prefixes: string[]): boolean {
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
