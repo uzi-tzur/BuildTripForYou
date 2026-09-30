@@ -39,7 +39,9 @@ export async function POST(request: Request) {
       distanceMeters: route.distanceMeters,
     };
     return NextResponse.json(payload);
-  } catch {
+  } catch (error) {
+    // Google's reason (API not enabled, key restricted, billing…) goes to the server logs, not to the page.
+    console.error("drive-time: Google Routes request failed:", error instanceof Error ? error.message : error);
     return fail("unavailable", "Couldn't get a drive time right now.", 502);
   }
 }
