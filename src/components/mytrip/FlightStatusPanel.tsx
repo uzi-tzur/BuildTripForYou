@@ -15,7 +15,7 @@ const CACHE_TTL_MS = 15 * 60_000;
 /** Transient failures aren't remembered: retrying them is the point. */
 const CACHEABLE_ERRORS: FlightLookupErrorCode[] = ["flight_not_found", "not_yet_available", "ambiguous_flight", "no_live_status", "rate_limited"];
 /** Bumped when the stored shape changes, so old entries are ignored instead of misread. */
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 
 interface CachedResponse {
   at: number;
@@ -76,6 +76,39 @@ function LegDetails({ title, leg }: { title: string; leg: FlightLegStatus }) {
         {place && <span className="font-normal text-slate-600"> — {place}</span>}
       </p>
       {times.length > 0 && <p className="text-slate-600">{times.join(" · ")}</p>}
+    </div>
+  );
+}
+
+/** Not-yet-reported values show as "--", never a guess. */
+function Field({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div>
+      <p className="text-[11px] text-slate-500">{label}</p>
+      <p className="text-sm font-semibold text-slate-800">{value ?? "--"}</p>
+    </div>
+  );
+}
+
+/** The at-a-glance arrival card: where to pick up bags, when it lands, and at which gate. */
+function ArrivalSummary({ status }: { status: FlightStatusResult }) {
+  const { arrival } = status;
+  const [timeLabel, time] = arrival.actual
+    ? ["Landed", arrival.actual]
+    : arrival.estimated
+      ? ["Now arrives", arrival.estimated]
+      : ["Arrives", arrival.scheduled];
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+      {arrival.baggage && <p className="text-lg font-semibold text-slate-900">🧳 Baggage claim {arrival.baggage}</p>}
+      <div className="mt-1 grid grid-cols-3 gap-2">
+        <Field label={timeLabel} value={formatWallClock(time)} />
+        <Field label="Gate" value={arrival.gate} />
+        <Field label="Terminal" value={arrival.terminal} />
+      </div>
+      {!arrival.baggage && status.status === "landed" && (
+        <p className="mt-1 text-[11px] text-slate-500">Baggage claim not reported yet.</p>
+      )}
     </div>
   );
 }
@@ -166,6 +199,7 @@ export function FlightStatusPanel({
           <p>
             <StatusPill status={status.status} disruption={disruption} />
           </p>
+          <ArrivalSummary status={status} />
           <LegDetails title="Departure" leg={status.departure} />
           <LegDetails title="Arrival" leg={status.arrival} />
           {(departureDelay > 0 || arrivalDelay > 0) && (

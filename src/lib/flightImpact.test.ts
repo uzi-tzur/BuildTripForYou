@@ -44,8 +44,8 @@ const baseStatus = (over: Partial<FlightStatusResult> = {}): FlightStatusResult 
   airline: "American Airlines",
   flightDate: "2026-09-27",
   status: "scheduled",
-  departure: { airport: "DFW", terminal: null, gate: null, scheduled: "2026-09-27T07:05", estimated: null, actual: null, delayMinutes: null },
-  arrival: { airport: "DEN", terminal: null, gate: null, scheduled: "2026-09-27T08:10", estimated: null, actual: null, delayMinutes: null },
+  departure: { airport: "DFW", terminal: null, gate: null, baggage: null, scheduled: "2026-09-27T07:05", estimated: null, actual: null, delayMinutes: null },
+  arrival: { airport: "DEN", terminal: null, gate: null, baggage: null, scheduled: "2026-09-27T08:10", estimated: null, actual: null, delayMinutes: null },
   provider: "aviationstack",
   ...over,
 });

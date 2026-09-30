@@ -9,7 +9,7 @@ function entry(over: Record<string, unknown> = {}) {
     flight_date: "2026-09-27",
     flight_status: "scheduled",
     departure: { iata: "DFW", terminal: "C", gate: "21", delay: 15, scheduled: "2026-09-27T07:05:00+00:00", estimated: "2026-09-27T07:20:00+00:00", actual: null },
-    arrival: { iata: "DEN", terminal: "B", gate: "32", delay: null, scheduled: "2026-09-27T08:10:00+00:00", estimated: null, actual: null },
+    arrival: { iata: "DEN", terminal: "B", gate: "32", baggage: "9", delay: null, scheduled: "2026-09-27T08:10:00+00:00", estimated: null, actual: null },
     airline: { name: "American Airlines" },
     flight: { iata: "AA1523", codeshared: null },
     ...over,
@@ -48,8 +48,8 @@ describe("AviationStackProvider", () => {
       flightDate: "2026-09-27",
       status: "scheduled",
       provider: "aviationstack",
-      departure: { airport: "DFW", terminal: "C", gate: "21", scheduled: "2026-09-27T07:05", estimated: "2026-09-27T07:20", actual: null, delayMinutes: 15 },
-      arrival: { airport: "DEN", terminal: "B", gate: "32", scheduled: "2026-09-27T08:10", estimated: null, actual: null, delayMinutes: null },
+      departure: { airport: "DFW", terminal: "C", gate: "21", baggage: null, scheduled: "2026-09-27T07:05", estimated: "2026-09-27T07:20", actual: null, delayMinutes: 15 },
+      arrival: { airport: "DEN", terminal: "B", gate: "32", baggage: "9", scheduled: "2026-09-27T08:10", estimated: null, actual: null, delayMinutes: null },
     });
   });
 

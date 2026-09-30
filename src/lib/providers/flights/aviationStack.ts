@@ -12,6 +12,7 @@ interface AviationStackLeg {
   iata?: string | null;
   terminal?: string | null;
   gate?: string | null;
+  baggage?: string | null;
   delay?: number | null;
   scheduled?: string | null;
   estimated?: string | null;
@@ -54,6 +55,7 @@ function toLeg(leg: AviationStackLeg | undefined): FlightLegStatus {
     airport: leg?.iata ?? null,
     terminal: leg?.terminal ?? null,
     gate: leg?.gate ?? null,
+    baggage: leg?.baggage ?? null,
     scheduled: localWallClock(leg?.scheduled),
     estimated: localWallClock(leg?.estimated),
     actual: localWallClock(leg?.actual),

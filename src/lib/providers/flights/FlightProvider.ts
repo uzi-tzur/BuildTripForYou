@@ -20,6 +20,8 @@ export interface FlightLegStatus {
   airport: string | null;
   terminal: string | null;
   gate: string | null;
+  /** Baggage claim carousel — only ever reported for the arrival leg. */
+  baggage: string | null;
   scheduled: string | null;
   estimated: string | null;
   actual: string | null;
