@@ -32,13 +32,11 @@ export function assessDisruption(status: FlightStatusResult): Disruption {
   if (status.status === "diverted" || status.status === "incident") return { kind: "diverted" };
   if (status.status === "landed") return { kind: "none" };
 
-  // Arrival delay is what collides with plans made for after landing; fall back to departure delay when only that is known.
-  const delay =
-    status.arrival.delayMinutes ??
-    wallClockDiffMinutes(status.arrival.estimated, status.arrival.scheduled) ??
-    status.departure.delayMinutes ??
-    wallClockDiffMinutes(status.departure.estimated, status.departure.scheduled) ??
-    0;
+  // The larger of the reported delays: the provider often updates the departure delay
+  // before the arrival one, so a stale "0" on arrival mustn't hide a known departure delay.
+  const arrivalDelay = status.arrival.delayMinutes ?? wallClockDiffMinutes(status.arrival.estimated, status.arrival.scheduled);
+  const departureDelay = status.departure.delayMinutes ?? wallClockDiffMinutes(status.departure.estimated, status.departure.scheduled);
+  const delay = Math.max(arrivalDelay ?? 0, departureDelay ?? 0);
   return delay >= DELAY_NOTICE_MINUTES ? { kind: "delay", delayMinutes: delay } : { kind: "none" };
 }
 

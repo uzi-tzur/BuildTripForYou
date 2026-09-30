@@ -67,6 +67,14 @@ describe("assessDisruption", () => {
     expect(assessDisruption(scheduledOnly)).toEqual({ kind: "none" });
   });
 
+  it("uses the departure delay when the arrival still reports none", () => {
+    const status = baseStatus({
+      departure: { ...baseStatus().departure, estimated: "2026-09-27T07:48", delayMinutes: 43 },
+      arrival: { ...baseStatus().arrival, estimated: "2026-09-27T08:10", delayMinutes: 0 },
+    });
+    expect(assessDisruption(status)).toEqual({ kind: "delay", delayMinutes: 43 });
+  });
+
   it("ignores small delays, and flags cancellations and diversions", () => {
     expect(assessDisruption(baseStatus({ departure: { ...baseStatus().departure, delayMinutes: 10 } }))).toEqual({ kind: "none" });
     expect(assessDisruption(baseStatus({ status: "cancelled" }))).toEqual({ kind: "cancelled" });
