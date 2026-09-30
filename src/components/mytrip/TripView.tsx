@@ -850,7 +850,7 @@ export function TripView({
               🖼️ Change photo
             </button>
           </div>
-          <Image src="/logo.png" alt="" width={128} height={128} className="rounded-2xl shadow-lg ring-2 ring-white/40" />
+          <Image src="/logo.png" alt="" width={64} height={64} className="rounded-xl shadow-lg ring-2 ring-white/40" />
         </div>
 
         <div className={trip.heroImage ? "absolute inset-x-0 bottom-0 p-5" : "mt-10"}>
