@@ -817,7 +817,7 @@ export function TripView({
 
   return (
     <main className="mx-auto max-w-2xl pb-24">
-      <div className={trip.heroImage ? "relative h-64 w-full overflow-hidden sm:h-80 sm:rounded-b-[2rem]" : "relative w-full overflow-hidden bg-gradient-to-br from-brand-blue-600 via-brand-blue-500 to-brand-green-500 px-4 pb-8 pt-6 sm:rounded-b-[2rem] sm:px-6"}>
+      <div className={trip.heroImage ? "relative flex min-h-64 w-full flex-col justify-end overflow-hidden sm:min-h-80 sm:rounded-b-[2rem]" : "relative w-full overflow-hidden bg-gradient-to-br from-brand-blue-600 via-brand-blue-500 to-brand-green-500 px-4 pb-8 pt-6 sm:rounded-b-[2rem] sm:px-6"}>
         {trip.heroImage && (
           <>
             <Image
@@ -833,31 +833,30 @@ export function TripView({
         )}
 
         <div className={trip.heroImage ? "absolute inset-x-0 top-0 flex items-center justify-between p-4" : "flex items-center justify-between"}>
-          <div className="flex flex-col items-start gap-2">
-            <Link
-              href="/my-trip"
-              className="flex items-center gap-1.5 rounded-full bg-black/25 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/35"
-            >
-              <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5">
-                <path d="M12 15L7 10L12 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              All trips
-            </Link>
-            <button
-              onClick={() => setChangingCover(!changingCover)}
-              className="flex items-center gap-1.5 rounded-full bg-black/25 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/35"
-            >
-              🖼️ Change photo
-            </button>
-          </div>
+          <Link
+            href="/my-trip"
+            className="flex items-center gap-1.5 rounded-full bg-black/25 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/35"
+          >
+            <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5">
+              <path d="M12 15L7 10L12 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            All trips
+          </Link>
           <Image src="/logo.png" alt="" width={64} height={64} className="rounded-xl shadow-lg ring-2 ring-white/40" />
         </div>
 
-        <div className={trip.heroImage ? "absolute inset-x-0 bottom-0 p-5" : "mt-10"}>
+        {/* In the flow (not pinned to the bottom) so a long, wrapping trip name makes the cover taller instead of running into the top row. */}
+        <div className={trip.heroImage ? "relative p-5 pt-28" : "mt-10"}>
           <h1 className="text-3xl font-extrabold tracking-tight text-white drop-shadow-sm sm:text-4xl">{trip.name}</h1>
           <p className={trip.heroImage ? "mt-1 text-sm font-medium text-slate-100" : "mt-1 text-sm font-medium text-white/90"}>
             {formatDateUS(trip.startDate)} → {formatDateUS(trip.endDate)}
           </p>
+          <button
+            onClick={() => setChangingCover(!changingCover)}
+            className="mt-2.5 flex items-center gap-1.5 rounded-full bg-black/25 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/35"
+          >
+            🖼️ Change photo
+          </button>
         </div>
       </div>
       {trip.heroCaption && (
