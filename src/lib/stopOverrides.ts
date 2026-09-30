@@ -1,3 +1,5 @@
+import type { ChecklistItem } from "@/lib/prepChecklist";
+
 /**
  * Date/time edits to the pre-loaded (hardcoded) itinerary stops. The base
  * itinerary lives in src/data/coloradoTrip.ts and can't be mutated at
@@ -25,6 +27,8 @@ export interface StopOverride {
    * here so it syncs through the existing per-trip overrides with no schema change.
    */
   routeUrl?: string | null;
+  /** Only used on the trip-level entry (key PREP_CHECKLIST_KEY): the user's packing & prep checklist. */
+  checklist?: ChecklistItem[];
 }
 
 /** Google Maps links only — this is rendered as a clickable href, so anything else (e.g. a javascript: URL) is refused. */

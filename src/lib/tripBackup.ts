@@ -17,6 +17,7 @@ import {
   type CustomStop,
   type CustomStopCategory,
 } from "@/lib/customStops";
+import { sanitizeChecklist } from "@/lib/prepChecklist";
 import { isValidGoogleMapsUrl, loadStopOverrides, saveStopOverrides, type StopOverride } from "@/lib/stopOverrides";
 import { loadAllTrips, restoreTrip, SEED_TRIP, type TripMeta } from "@/lib/trips";
 
@@ -126,7 +127,7 @@ const TIME = /^\d{2}:\d{2}$/;
 const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
 const OFFSET = /^[+-]\d{2}:\d{2}$/;
 /** Day-level keys ("day0"), stop keys ("day0-stop3"), and the older date-based stop keys ("2026-09-27-3"). */
-const OVERRIDE_KEY = /^(day\d{1,3}(-stop\d{1,3})?|\d{4}-\d{2}-\d{2}-\d{1,3})$/;
+const OVERRIDE_KEY = /^(prep|day\d{1,3}(-stop\d{1,3})?|\d{4}-\d{2}-\d{2}-\d{1,3})$/;
 const IMAGE_HOSTS = new Set(["images.pexels.com", "picsum.photos"]);
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -232,6 +233,7 @@ function sanitizeOverride(value: unknown): StopOverride | null {
     const url = typeof value.routeUrl === "string" && value.routeUrl.length <= 4000 && isValidGoogleMapsUrl(value.routeUrl) ? value.routeUrl : null;
     override.routeUrl = url;
   }
+  if ("checklist" in value) override.checklist = sanitizeChecklist(value.checklist);
   return override;
 }
 

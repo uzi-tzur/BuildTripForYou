@@ -16,6 +16,8 @@ import { formatWallClock, proposeDelayChanges } from "@/lib/flightImpact";
 import { rainWindowLabel } from "@/lib/weatherLabels";
 import { buildFlight, flightLabel, flightRoute, type Flight } from "@/lib/flights";
 import { EditDayRouteForm } from "@/components/mytrip/EditDayRouteForm";
+import { PrepChecklist } from "@/components/mytrip/PrepChecklist";
+import { PREP_CHECKLIST_KEY, sanitizeChecklist, type ChecklistItem } from "@/lib/prepChecklist";
 import { PhotoSearchForm } from "@/components/mytrip/PhotoSearchForm";
 import { Chevron } from "@/components/ui/Chevron";
 import { DemoBadge } from "@/components/ui/DemoBadge";
@@ -694,6 +696,17 @@ export function TripView({
     });
   }
 
+  /** The trip-level packing & prep checklist, kept in the overrides so it syncs and backs up like everything else. */
+  function editChecklist(checklist: ChecklistItem[]) {
+    setOverrides((prev) => {
+      const next = { ...prev, [PREP_CHECKLIST_KEY]: { ...prev[PREP_CHECKLIST_KEY], checklist } };
+      saveStopOverrides(trip.id, next);
+      overridesRef.current = next;
+      void pushToCloud(customStopsRef.current, next);
+      return next;
+    });
+  }
+
   /** Day-level entries use the key `day${index}` — same position-based scheme as stop ids, so a date shift doesn't orphan the link. */
   function editDayRoute(dayIndex: number, routeUrl: string | null) {
     const id = `day${dayIndex}`;
@@ -850,6 +863,15 @@ export function TripView({
           📄 Export &amp; share itinerary
         </button>
         {trip.subtitle && <p className="mt-3 text-[15px] leading-relaxed text-slate-600">{trip.subtitle}</p>}
+
+        {/* Waits for the clock so it opens by default before the trip, and starts collapsed once it's underway. */}
+        {now && (
+          <PrepChecklist
+            items={sanitizeChecklist(overrides[PREP_CHECKLIST_KEY]?.checklist)}
+            defaultOpen={phase === "before" || phase === "unknown"}
+            onChange={editChecklist}
+          />
+        )}
 
         {phase === "before" && daysUntil !== null && (
           <div className="mt-5 rounded-2xl bg-gradient-to-br from-brand-blue-50 to-brand-green-50 p-5 text-center shadow-card">
