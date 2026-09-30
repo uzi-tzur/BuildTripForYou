@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { AddActivityForm } from "@/components/mytrip/AddActivityForm";
 import { EditNoteForm } from "@/components/mytrip/EditNoteForm";
 import { EditTimeForm } from "@/components/mytrip/EditTimeForm";
@@ -48,9 +48,31 @@ function googleMapsUrl(address: string): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
 }
 
-/** Universal link — opens the Waze app if installed, else waze.com in browser. */
+/** Web link — shows waze.com (with a Download prompt) when the app can't be opened. */
 function wazeUrl(address: string): string {
   return `https://waze.com/ul?q=${encodeURIComponent(address)}&navigate=yes`;
+}
+
+/** Waze's own app scheme — opens the installed app directly. */
+function wazeAppUrl(address: string): string {
+  return `waze://?q=${encodeURIComponent(address)}&navigate=yes`;
+}
+
+/**
+ * On phones, the waze.com universal link often isn't handed to the app —
+ * e.g. from the home-screen web app or an in-app browser on iPhone, it just
+ * shows the "Don't have Waze yet?" page. So on mobile we open the app via its
+ * own scheme and only fall back to the web link if the page is still visible
+ * afterwards (i.e. Waze isn't installed). Desktop keeps the plain link.
+ */
+function openWaze(event: MouseEvent<HTMLAnchorElement>, address: string) {
+  if (!/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) return;
+  event.preventDefault();
+  const fallback = window.setTimeout(() => {
+    if (document.visibilityState === "visible") window.location.href = wazeUrl(address);
+  }, 1500);
+  document.addEventListener("visibilitychange", () => window.clearTimeout(fallback), { once: true });
+  window.location.href = wazeAppUrl(address);
 }
 
 /** Free-form web search for a place/activity — reviews, hours, current info, etc. */
@@ -1261,6 +1283,7 @@ function DaySection({
                           {stop.address && (
                             <a
                               href={wazeUrl(stop.address)}
+                              onClick={(e) => openWaze(e, stop.address!)}
                               target="_blank"
                               rel="noreferrer"
                               className="whitespace-nowrap rounded-full bg-sky-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-sky-600 active:scale-95"
