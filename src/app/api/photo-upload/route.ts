@@ -8,6 +8,23 @@ import {
   type PhotoUploadErrorCode,
 } from "@/lib/tripPhotos";
 
+/** A pasted key often picks up spaces, a line break or quotes — any of which make Supabase reject it ("Invalid Compact JWS"). */
+function cleanKey(raw: string | undefined): string | undefined {
+  return raw?.trim().replace(/^["']|["']$/g, "").trim() || undefined;
+}
+
+/** What kind of key is configured — for the logs, without ever logging the key itself. */
+function describeKey(key: string): string {
+  const kind = key.startsWith("sb_secret_")
+    ? "secret key (sb_secret_…)"
+    : key.startsWith("sb_publishable_")
+      ? "PUBLISHABLE key — wrong key, use the secret one"
+      : key.startsWith("eyJ") && key.split(".").length === 3
+        ? "legacy JWT key (should be service_role, not anon)"
+        : "unrecognized value — not a Supabase API key";
+  return `${kind}, ${key.length} chars`;
+}
+
 function fail(code: PhotoUploadErrorCode, message: string, status: number) {
   const body: PhotoUploadApiResponse = { ok: false, error: { code, message } };
   return NextResponse.json(body, { status });
@@ -22,7 +39,7 @@ function fail(code: PhotoUploadErrorCode, message: string, status: number) {
  */
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceKey = cleanKey(process.env.SUPABASE_SERVICE_ROLE_KEY);
   if (!supabaseUrl || !serviceKey) return fail("not_configured", "Photo uploads aren't set up on this server yet.", 503);
 
   let form: FormData;
@@ -43,7 +60,7 @@ export async function POST(request: Request) {
   const storage = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } }).storage.from(TRIP_PHOTOS_BUCKET);
   const { error } = await storage.upload(path, bytes, { contentType: type.mime, upsert: false });
   if (error) {
-    console.error("photo-upload: Supabase Storage upload failed:", error.message);
+    console.error(`photo-upload: Supabase Storage upload failed: ${error.message} [SUPABASE_SERVICE_ROLE_KEY: ${describeKey(serviceKey)}]`);
     return fail("upload_failed", "The photo couldn't be saved — try again.", 502);
   }
 

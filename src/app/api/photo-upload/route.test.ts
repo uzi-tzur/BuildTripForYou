@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { detectImageType, isTripPhotoUrl } from "@/lib/tripPhotos";
 
-const upload = vi.fn();
-vi.mock("@supabase/supabase-js", () => ({
-  createClient: () => ({
+const { upload, createClient } = vi.hoisted(() => {
+  const upload = vi.fn();
+  const createClient = vi.fn(() => ({
     storage: {
       from: () => ({
         upload,
@@ -12,8 +12,10 @@ vi.mock("@supabase/supabase-js", () => ({
         }),
       }),
     },
-  }),
-}));
+  }));
+  return { upload, createClient };
+});
+vi.mock("@supabase/supabase-js", () => ({ createClient }));
 
 const { POST } = await import("./route");
 
@@ -29,6 +31,7 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://abc.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
   upload.mockReset().mockResolvedValue({ error: null });
+  createClient.mockClear();
 });
 afterEach(() => {
   delete process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -57,6 +60,12 @@ describe("POST /api/photo-upload", () => {
     const res = await send(new TextEncoder().encode("<html>not a photo</html>"));
     expect(res.status).toBe(415);
     expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("cleans spaces, line breaks and quotes a pasted key picked up", async () => {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = ' "sb_secret_abc123"\n';
+    await send(JPEG);
+    expect(createClient).toHaveBeenCalledWith("https://abc.supabase.co", "sb_secret_abc123", expect.anything());
   });
 
   it("reports upload_failed when storage refuses the file", async () => {
