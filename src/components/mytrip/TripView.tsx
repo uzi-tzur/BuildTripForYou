@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { AddActivityForm } from "@/components/mytrip/AddActivityForm";
+import { DriveTime } from "@/components/mytrip/DriveTime";
 import { EditNoteForm } from "@/components/mytrip/EditNoteForm";
 import { EditTimeForm } from "@/components/mytrip/EditTimeForm";
 import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
@@ -869,6 +870,9 @@ export function TripView({
               Right now
             </p>
             {current && <StopSummary label="Current" stop={current.stop} />}
+            {current?.stop.address && next?.stop.address && current.stop.address !== next.stop.address && (
+              <DriveTime origin={current.stop.address} destination={next.stop.address} />
+            )}
             {next && <StopSummary label="Next" stop={next.stop} />}
           </div>
         )}
