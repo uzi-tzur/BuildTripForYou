@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { TripView } from "@/components/mytrip/TripView";
 import type { TripDay } from "@/data/coloradoTrip";
-import { getTripDays, loadAllTrips, type TripMeta } from "@/lib/trips";
+import { getOrCreateSyncCode } from "@/lib/syncCode";
+import { pushTripToCloud } from "@/lib/tripListSync";
+import { getTripDays, loadAllTrips, markTripSynced, updateTrip, type TripMeta } from "@/lib/trips";
 import type { WeatherCondition } from "@/lib/types";
 
 export function TripPageClient({ tripId }: { tripId: string }) {
@@ -42,6 +44,16 @@ export function TripPageClient({ tripId }: { tripId: string }) {
     });
   }, [tripId, refreshWeather]);
 
+  /** Same save + cloud sync as the 🖼️ button on the trip list. */
+  function handleChangePhoto(heroImage: string, heroCaption: string) {
+    if (!trip) return;
+    const updated = updateTrip(trip.id, { heroImage, heroCaption: heroCaption || null });
+    setTrip(updated);
+    void pushTripToCloud(updated, getOrCreateSyncCode()).then((ok) => {
+      if (ok) markTripSynced(updated.id);
+    });
+  }
+
   if (trip === undefined) {
     return <main className="px-6 py-16 text-center text-slate-400">Loading…</main>;
   }
@@ -69,6 +81,7 @@ export function TripPageClient({ tripId }: { tripId: string }) {
       usingMockWeather={usingMockWeather}
       weatherUpdatedAt={weatherUpdatedAt}
       onRefreshWeather={() => refreshWeather(days)}
+      onChangePhoto={handleChangePhoto}
     />
   );
 }

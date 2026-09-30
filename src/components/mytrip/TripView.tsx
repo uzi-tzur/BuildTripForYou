@@ -464,6 +464,7 @@ export function TripView({
   usingMockWeather,
   weatherUpdatedAt,
   onRefreshWeather,
+  onChangePhoto,
 }: {
   trip: TripMeta;
   days: TripDay[];
@@ -471,8 +472,10 @@ export function TripView({
   usingMockWeather: boolean;
   weatherUpdatedAt: string | null;
   onRefreshWeather: () => Promise<void>;
+  onChangePhoto: (heroImage: string, heroCaption: string) => void;
 }) {
   const now = useNow();
+  const [changingCover, setChangingCover] = useState(false);
   const [customStops, setCustomStops] = useState<CustomStop[]>([]);
   const [overrides, setOverrides] = useState<Record<string, StopOverride>>({});
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
@@ -830,15 +833,23 @@ export function TripView({
         )}
 
         <div className={trip.heroImage ? "absolute inset-x-0 top-0 flex items-center justify-between p-4" : "flex items-center justify-between"}>
-          <Link
-            href="/my-trip"
-            className="flex items-center gap-1.5 rounded-full bg-black/25 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/35"
-          >
-            <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5">
-              <path d="M12 15L7 10L12 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            All trips
-          </Link>
+          <div className="flex flex-col items-start gap-2">
+            <Link
+              href="/my-trip"
+              className="flex items-center gap-1.5 rounded-full bg-black/25 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/35"
+            >
+              <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5">
+                <path d="M12 15L7 10L12 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              All trips
+            </Link>
+            <button
+              onClick={() => setChangingCover(!changingCover)}
+              className="flex items-center gap-1.5 rounded-full bg-black/25 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/35"
+            >
+              🖼️ Change photo
+            </button>
+          </div>
           <Image src="/logo.png" alt="" width={128} height={128} className="rounded-2xl shadow-lg ring-2 ring-white/40" />
         </div>
 
@@ -854,6 +865,17 @@ export function TripView({
       )}
 
       <div className="px-4 sm:px-6">
+        {changingCover && (
+          <PhotoSearchForm
+            heading="Cover photo for this trip"
+            initialQuery={trip.name}
+            onSave={(url, caption) => {
+              onChangePhoto(url, caption);
+              setChangingCover(false);
+            }}
+            onCancel={() => setChangingCover(false)}
+          />
+        )}
         <SyncIndicator status={syncStatus} lastSyncedAt={lastSyncedAt} onSync={() => void manualSync()} />
         <WeatherSyncRow updatedAt={weatherUpdatedAt} onRefresh={onRefreshWeather} />
         <button
