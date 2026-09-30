@@ -210,8 +210,8 @@ function staticRefToDisplay(
 
 /**
  * A custom stop produces one display entry on its start date, and — if it
- * has an end date different from the start (rental car return, hotel
- * checkout, etc.) — a second, linked entry auto-added on that end date.
+ * has an end date different from the start (rental car return, etc.) — a
+ * second, linked entry auto-added on that end date. Hotels never get one.
  * Both entries share the same CustomStop.id, so removing (or editing
  * dates so they collapse back to the same day) keeps them in sync.
  */
@@ -243,7 +243,7 @@ function customToDisplayEntries(
     },
   ];
 
-  if (stop.endDate && stop.endDate !== stop.date) {
+  if (stop.category !== "hotel" && stop.endDate && stop.endDate !== stop.date) {
     entries.push({
       forDate: stop.endDate,
       entry: {

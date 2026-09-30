@@ -43,6 +43,8 @@ export function AddActivityForm({
   const [flightNumber, setFlightNumber] = useState("");
   const [error, setError] = useState<string | null>(null);
   const isAirport = category === "airport";
+  // Hotels don't get a check-out entry, so they have no end date/time.
+  const hasEnd = category !== "hotel";
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -52,7 +54,7 @@ export function AddActivityForm({
       setError("Please enter what this activity is.");
       return;
     }
-    if (endDate && endDate < startDate) {
+    if (hasEnd && endDate && endDate < startDate) {
       setError("End date can't be before the start date.");
       return;
     }
@@ -62,8 +64,8 @@ export function AddActivityForm({
         id: generateStopId(),
         date: startDate,
         time: time || null,
-        endDate: endDate || null,
-        endTime: endTime || null,
+        endDate: hasEnd ? endDate || null : null,
+        endTime: hasEnd ? endTime || null : null,
         category,
         title: title.trim(),
         address: address.trim() || null,
@@ -146,31 +148,33 @@ export function AddActivityForm({
         </div>
       </div>
 
-      <div>
-        <p className={labelClass}>Ends (optional — e.g. rental car return, hotel checkout)</p>
-        <div className="grid grid-cols-2 gap-2">
-          <input
-            type="date"
-            value={endDate}
-            min={tripStartDate}
-            max={tripEndDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className={inputClass}
-          />
-          <input
-            type="time"
-            value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
-            className={inputClass}
-            title={`Time is in ${timezoneLabel}`}
-          />
+      {hasEnd && (
+        <div>
+          <p className={labelClass}>Ends (optional — e.g. rental car return)</p>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="date"
+              value={endDate}
+              min={tripStartDate}
+              max={tripEndDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className={inputClass}
+            />
+            <input
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+              className={inputClass}
+              title={`Time is in ${timezoneLabel}`}
+            />
+          </div>
+          {endDate && endDate !== startDate && (
+            <p className="mt-1 text-[11px] text-brand-blue-600">
+              Will also show up on {new Date(`${endDate}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.
+            </p>
+          )}
         </div>
-        {endDate && endDate !== startDate && (
-          <p className="mt-1 text-[11px] text-brand-blue-600">
-            Will also show up on {new Date(`${endDate}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.
-          </p>
-        )}
-      </div>
+      )}
 
       <input
         value={address}

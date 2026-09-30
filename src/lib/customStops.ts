@@ -45,7 +45,7 @@ export const CUSTOM_STOP_CATEGORY_ICON: Record<CustomStopCategory, string> = {
  */
 export const CUSTOM_STOP_END_LABEL: Record<CustomStopCategory, string> = {
   rental_car: "Return",
-  hotel: "Check out",
+  hotel: "End", // unused — hotels have no end entry
   hiking: "End",
   restaurant: "End",
   city: "Depart",
@@ -58,7 +58,7 @@ export interface CustomStop {
   id: string;
   date: string; // start date, matches a TripDay.date, e.g. "2026-09-28"
   time: string | null; // start time, "HH:MM" 24h, Colorado local (Mountain Time), or null
-  endDate: string | null; // end date, e.g. rental car drop-off / hotel check-out
+  endDate: string | null; // end date, e.g. rental car drop-off (always null for hotels)
   endTime: string | null; // end time, "HH:MM" 24h, Colorado local, or null
   category: CustomStopCategory;
   title: string;
