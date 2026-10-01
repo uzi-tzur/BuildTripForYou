@@ -499,6 +499,9 @@ export function TripView({
 }) {
   const now = useNow();
   const [changingCover, setChangingCover] = useState(false);
+  /** Set by tapping Current / Next in "Right now": the day holding that activity opens and scrolls to it. */
+  const [focusRequest, setFocusRequest] = useState<{ stopId: string; n: number } | null>(null);
+  const focusStop = (stopId: string) => setFocusRequest((prev) => ({ stopId, n: (prev?.n ?? 0) + 1 }));
   const [customStops, setCustomStops] = useState<CustomStop[]>([]);
   const [overrides, setOverrides] = useState<Record<string, StopOverride>>({});
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
@@ -947,11 +950,11 @@ export function TripView({
               </span>
               Right now
             </p>
-            {current && <StopSummary label="Current" stop={current.stop} />}
+            {current && <StopSummary label="Current" stop={current.stop} onClick={() => focusStop(current.stop.id)} />}
             {current?.stop.address && next?.stop.address && current.stop.address !== next.stop.address && (
               <DriveTime origin={current.stop.address} destination={next.stop.address} />
             )}
-            {next && <StopSummary label="Next" stop={next.stop} />}
+            {next && <StopSummary label="Next" stop={next.stop} onClick={() => focusStop(next.stop.id)} />}
           </div>
         )}
 
@@ -976,6 +979,7 @@ export function TripView({
               onEditRoute={(url) => editDayRoute(dayIndex, url)}
               isActive={day.date === activeDate}
               currentStopId={phase === "during" ? current?.stop.id : undefined}
+              focusRequest={focusRequest}
               weatherEntries={day.weatherLocations.map((loc) => ({
                 name: loc.name,
                 weather: weatherByKey[weatherKey(day.date, loc.name)] ?? null,
@@ -1000,18 +1004,23 @@ export function TripView({
   );
 }
 
-function StopSummary({ label, stop }: { label: string; stop: DisplayStop }) {
+/** One line of "Right now" — tapping it jumps to that activity in the itinerary below. */
+function StopSummary({ label, stop, onClick }: { label: string; stop: DisplayStop; onClick: () => void }) {
   return (
-    <div className="flex items-center gap-2.5">
+    <button
+      onClick={onClick}
+      className="-mx-1.5 flex w-[calc(100%+0.75rem)] items-center gap-2.5 rounded-xl px-1.5 py-1 text-left transition-colors hover:bg-brand-green-100/60 active:bg-brand-green-100"
+    >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-base shadow-sm ring-1 ring-black/5">
         {stop.icon}
       </span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-brand-green-700">{label}</span>
         <p className="truncate font-semibold text-slate-900">{stop.title}</p>
         <p className="text-xs text-slate-500">{stop.timeLabel}</p>
       </div>
-    </div>
+      <span aria-hidden className="shrink-0 text-xl leading-none text-brand-green-600">›</span>
+    </button>
   );
 }
 
@@ -1066,6 +1075,7 @@ function DaySection({
   stops,
   isActive,
   currentStopId,
+  focusRequest,
   weatherEntries,
   usingMockWeather,
   tripStartDate,
@@ -1089,6 +1099,7 @@ function DaySection({
   now: Date | null;
   isActive: boolean;
   currentStopId?: string;
+  focusRequest: { stopId: string; n: number } | null;
   weatherEntries: { name: string; weather: WeatherCondition | null }[];
   usingMockWeather: boolean;
   tripStartDate: string;
@@ -1116,6 +1127,26 @@ function DaySection({
   useEffect(() => {
     if (isActive) setOpen(true);
   }, [isActive]);
+
+  // A tap on Current / Next in "Right now": if the activity is in this day, open it,
+  // scroll the activity into view and briefly highlight it.
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusRequest || !stops.some((s) => s.id === focusRequest.stopId)) return;
+    setOpen(true);
+    setHighlightId(focusRequest.stopId);
+    const scroll = window.setTimeout(
+      () => document.getElementById(`stop-${focusRequest.stopId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }),
+      50,
+    );
+    const clear = window.setTimeout(() => setHighlightId(null), 2500);
+    return () => {
+      window.clearTimeout(scroll);
+      window.clearTimeout(clear);
+    };
+    // Runs per tap (focusRequest.n changes), not whenever the stop list re-renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRequest]);
 
   return (
     <section
@@ -1204,7 +1235,10 @@ function DaySection({
                 return (
                   <li
                     key={stop.id}
-                    className={`rounded-xl border-l-[3px] p-3 transition-colors ${stop.status ? "opacity-60" : ""} ${
+                    id={`stop-${stop.id}`}
+                    className={`rounded-xl border-l-[3px] p-3 transition-all duration-500 ${stop.status ? "opacity-60" : ""} ${
+                      highlightId === stop.id ? "shadow-lg ring-2 ring-brand-blue-400" : ""
+                    } ${
                       stop.id === currentStopId
                         ? "border-l-brand-green-500 bg-brand-green-50/70 ring-1 ring-brand-green-200"
                         : "border-l-transparent bg-slate-50 hover:bg-slate-100/70"
