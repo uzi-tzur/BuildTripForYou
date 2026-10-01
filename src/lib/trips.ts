@@ -7,6 +7,7 @@
  * src/lib/customStops.ts), same mechanism either way.
  */
 import { COLORADO_TRIP_DAYS, TRIP_META, type TripDay } from "@/data/coloradoTrip";
+import { deviceTripTimeZone, tripTimeZoneFields } from "@/lib/timeZones";
 import { loadCustomStops, saveCustomStops } from "@/lib/customStops";
 import { loadStopOverrides, saveStopOverrides } from "@/lib/stopOverrides";
 
@@ -185,8 +186,8 @@ export function createTrip(input: { name: string; subtitle: string; startDate: s
     endDate: input.endDate,
     heroImage: null,
     heroCaption: null,
-    timezoneOffset: "-06:00",
-    timezoneLabel: "local time",
+    // Times the user enters mean the time where they are, unless they pick another zone for the trip.
+    ...tripTimeZoneFields(deviceTripTimeZone(), input.startDate),
     isSeed: false,
     createdAt: new Date().toISOString(),
   };
@@ -206,7 +207,15 @@ export function deleteTrip(id: string): void {
 
 export function updateTrip(
   id: string,
-  updates: { name?: string; startDate?: string; endDate?: string; heroImage?: string | null; heroCaption?: string | null },
+  updates: {
+    name?: string;
+    startDate?: string;
+    endDate?: string;
+    heroImage?: string | null;
+    heroCaption?: string | null;
+    timezoneOffset?: string;
+    timezoneLabel?: string;
+  },
 ): TripMeta {
   const current = loadAllTrips().find((t) => t.id === id);
   if (!current) throw new Error(`Trip not found: ${id}`);

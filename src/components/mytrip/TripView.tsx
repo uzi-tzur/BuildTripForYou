@@ -10,6 +10,7 @@ import { EditTimeForm } from "@/components/mytrip/EditTimeForm";
 import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
 import { ItineraryExport } from "@/components/mytrip/ItineraryExport";
 import { DelaySuggestion } from "@/components/mytrip/DelaySuggestion";
+import { TripTimeZoneRow } from "@/components/mytrip/TripTimeZoneRow";
 import { FlightDelayBanner } from "@/components/mytrip/FlightDelayBanner";
 import { laterOnSameDayMinutes, proposeFollowingShift, type ActivityStatus } from "@/lib/activityImpact";
 import { FlightStatusPanel } from "@/components/mytrip/FlightStatusPanel";
@@ -90,14 +91,9 @@ function weatherServiceUrl(placeName: string): string {
   return `https://www.google.com/search?q=${encodeURIComponent(`weather in ${placeName}, CO`)}`;
 }
 
+/** A user-entered time as they entered it — the wall-clock digits in the trip's zone, never converted to another zone. */
 function formatTripTime(iso: string, timezoneLabel: string): string {
-  return (
-    new Date(iso).toLocaleTimeString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-      timeZone: "America/Denver",
-    }) + ` (${timezoneLabel})`
-  );
+  return `${formatWallClock(iso)} (${timezoneLabel})`;
 }
 
 /** How to route an edit ("update the time/date") back to the right piece of state. */
@@ -158,10 +154,7 @@ function isFlightStep(stop: DisplayStop): boolean {
   return stop.kind === "flight" || flightOf(stop) !== null;
 }
 
-/**
- * When to ask "How did it go?": once a timed activity has started, or — for
- * one without a set time ("Late afternoon") — from the start of its day.
- */
+/** Whether an activity has started: a timed one once its time passes; one without a set time ("Late afternoon") from the start of its day. */
 function isDue(stop: DisplayStop, now: Date | null): boolean {
   if (!now) return false;
   const startsAt = stop.time ? Date.parse(stop.time) : new Date(`${stop.editable.date}T00:00:00`).getTime();
@@ -488,6 +481,7 @@ export function TripView({
   weatherUpdatedAt,
   onRefreshWeather,
   onChangePhoto,
+  onChangeTimeZone,
 }: {
   trip: TripMeta;
   days: TripDay[];
@@ -496,6 +490,7 @@ export function TripView({
   weatherUpdatedAt: string | null;
   onRefreshWeather: () => Promise<void>;
   onChangePhoto: (heroImage: string, heroCaption: string) => void;
+  onChangeTimeZone: (timezoneOffset: string, timezoneLabel: string) => void;
 }) {
   const now = useNow();
   const [changingCover, setChangingCover] = useState(false);
@@ -915,6 +910,12 @@ export function TripView({
         )}
         <SyncIndicator status={syncStatus} lastSyncedAt={lastSyncedAt} onSync={() => void manualSync()} />
         <WeatherSyncRow updatedAt={weatherUpdatedAt} onRefresh={onRefreshWeather} />
+        <TripTimeZoneRow
+          timezoneLabel={trip.timezoneLabel}
+          timezoneOffset={trip.timezoneOffset}
+          startDate={trip.startDate}
+          onChange={onChangeTimeZone}
+        />
         <button
           onClick={() => setExporting(true)}
           className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:border-brand-blue-300 hover:text-brand-blue-700 active:scale-[0.99]"
@@ -1368,7 +1369,7 @@ function DaySection({
 
                         <ActivityStatusRow
                           status={stop.status}
-                          due={isDue(stop, now)}
+                          started={isDue(stop, now)}
                           onSet={(status) => onSetStatus(stop.id, status)}
                           onMoved={() => setEditingId(stop.id)}
                         />
@@ -1566,18 +1567,19 @@ function DaySection({
 }
 
 /**
- * Once an activity's time has come: "How did it go?" — done, skipped, or
- * moved to a new time (which opens the time editor and, if later, suggests
- * moving the rest of the day). After an answer, a short status with Undo.
+ * On every activity: done, skipped, or moved to a new time (which opens the
+ * time editor and, if later, suggests moving the rest of the day) — asked
+ * as "How did it go?" once it has started, and offered ahead of time too.
+ * After an answer, a short status with Undo.
  */
 function ActivityStatusRow({
   status,
-  due,
+  started,
   onSet,
   onMoved,
 }: {
   status?: ActivityStatus;
-  due: boolean;
+  started: boolean;
   onSet: (status: ActivityStatus | null) => void;
   onMoved: () => void;
 }) {
@@ -1591,12 +1593,10 @@ function ActivityStatusRow({
       </p>
     );
   }
-  if (!due) return null;
-
   const buttonClass = "whitespace-nowrap rounded-full border bg-white px-2.5 py-1 text-[11px] font-semibold shadow-sm transition-all active:scale-95";
   return (
     <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg bg-white/70 px-2 py-1.5 ring-1 ring-slate-200">
-      <span className="text-[11px] font-semibold text-slate-500">How did it go?</span>
+      <span className="text-[11px] font-semibold text-slate-500">{started ? "How did it go?" : "Mark as:"}</span>
       <button onClick={() => onSet("done")} className={`${buttonClass} border-brand-green-300 text-brand-green-700 hover:bg-brand-green-50`}>
         ✅ Done
       </button>

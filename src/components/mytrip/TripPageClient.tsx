@@ -54,6 +54,15 @@ export function TripPageClient({ tripId }: { tripId: string }) {
     });
   }
 
+  function handleChangeTimeZone(timezoneOffset: string, timezoneLabel: string) {
+    if (!trip) return;
+    const updated = updateTrip(trip.id, { timezoneOffset, timezoneLabel });
+    setTrip(updated);
+    void pushTripToCloud(updated, getOrCreateSyncCode()).then((ok) => {
+      if (ok) markTripSynced(updated.id);
+    });
+  }
+
   if (trip === undefined) {
     return <main className="px-6 py-16 text-center text-slate-400">Loading…</main>;
   }
@@ -82,6 +91,7 @@ export function TripPageClient({ tripId }: { tripId: string }) {
       weatherUpdatedAt={weatherUpdatedAt}
       onRefreshWeather={() => refreshWeather(days)}
       onChangePhoto={handleChangePhoto}
+      onChangeTimeZone={handleChangeTimeZone}
     />
   );
 }
