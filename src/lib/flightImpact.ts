@@ -21,7 +21,7 @@ export type Disruption =
   | { kind: "cancelled" }
   | { kind: "diverted" };
 
-function wallClockDiffMinutes(later: string | null, earlier: string | null): number | null {
+export function wallClockDiffMinutes(later: string | null, earlier: string | null): number | null {
   if (!later || !earlier) return null;
   return Math.round((Date.parse(`${later.slice(0, 16)}:00Z`) - Date.parse(`${earlier.slice(0, 16)}:00Z`)) / 60_000);
 }
@@ -32,11 +32,13 @@ export function assessDisruption(status: FlightStatusResult): Disruption {
   if (status.status === "diverted" || status.status === "incident") return { kind: "diverted" };
   if (status.status === "landed") return { kind: "none" };
 
-  // The larger of the reported delays: the provider often updates the departure delay
-  // before the arrival one, so a stale "0" on arrival mustn't hide a known departure delay.
   const arrivalDelay = status.arrival.delayMinutes ?? wallClockDiffMinutes(status.arrival.estimated, status.arrival.scheduled);
   const departureDelay = status.departure.delayMinutes ?? wallClockDiffMinutes(status.departure.estimated, status.departure.scheduled);
-  const delay = Math.max(arrivalDelay ?? 0, departureDelay ?? 0);
+  // Once the plane has left, the arrival estimate is live (time made up in the air counts), so it
+  // decides what happens after landing. Before that, take the larger: the provider often updates
+  // the departure delay first, and a stale "0" on arrival mustn't hide it.
+  const departed = status.status === "departed" || status.departure.actual !== null;
+  const delay = departed && arrivalDelay !== null ? arrivalDelay : Math.max(arrivalDelay ?? 0, departureDelay ?? 0);
   return delay >= DELAY_NOTICE_MINUTES ? { kind: "delay", delayMinutes: delay } : { kind: "none" };
 }
 

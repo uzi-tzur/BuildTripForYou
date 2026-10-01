@@ -1,3 +1,4 @@
+import type { ActivityStatus } from "@/lib/activityImpact";
 import type { ChecklistItem } from "@/lib/prepChecklist";
 
 /**
@@ -27,6 +28,8 @@ export interface StopOverride {
    * here so it syncs through the existing per-trip overrides with no schema change.
    */
   routeUrl?: string | null;
+  /** What the user confirmed about this activity once its time came. Keyed by the display id, so a custom stop's start and end entries each have their own. */
+  status?: ActivityStatus;
   /** Only used on the trip-level entry (key PREP_CHECKLIST_KEY): the user's packing & prep checklist. */
   checklist?: ChecklistItem[];
 }

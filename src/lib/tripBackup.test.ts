@@ -170,6 +170,27 @@ describe("backup files", () => {
     expect(Object.keys(result.snapshot.overrides).sort()).toEqual(["day0", "day0-stop2", "day1"]);
   });
 
+  it("keeps activity statuses, including on custom stops, and drops unknown ones", () => {
+    const result = parseBackupFile(
+      JSON.stringify({
+        format: "buildtrip-trip-backup",
+        version: 1,
+        trip: { id: "t", name: "T", subtitle: "", startDate: "2026-06-10", endDate: "2026-06-15" },
+        customStops: [],
+        overrides: {
+          "day0-stop1": { status: "done" },
+          "custom-3f2a9c1e-77b0-4d2e-9a51-0c7e2b9d4f10-start": { status: "skipped" },
+          "day0-stop2": { status: "teleported" },
+        },
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.snapshot.overrides["day0-stop1"]?.status).toBe("done");
+    expect(result.snapshot.overrides["custom-3f2a9c1e-77b0-4d2e-9a51-0c7e2b9d4f10-start"]?.status).toBe("skipped");
+    expect(result.snapshot.overrides["day0-stop2"]?.status).toBeUndefined();
+  });
+
   it("keeps the packing & prep checklist, dropping malformed items", () => {
     const result = parseBackupFile(
       JSON.stringify({

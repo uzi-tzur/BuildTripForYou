@@ -9,7 +9,9 @@ import { EditNoteForm } from "@/components/mytrip/EditNoteForm";
 import { EditTimeForm } from "@/components/mytrip/EditTimeForm";
 import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
 import { ItineraryExport } from "@/components/mytrip/ItineraryExport";
+import { DelaySuggestion } from "@/components/mytrip/DelaySuggestion";
 import { FlightDelayBanner } from "@/components/mytrip/FlightDelayBanner";
+import { laterOnSameDayMinutes, proposeFollowingShift, type ActivityStatus } from "@/lib/activityImpact";
 import { FlightStatusPanel } from "@/components/mytrip/FlightStatusPanel";
 import type { ItineraryInput } from "@/lib/itinerary";
 import { formatWallClock, proposeDelayChanges } from "@/lib/flightImpact";
@@ -140,6 +142,8 @@ interface DisplayStop {
   /** Set only on an itinerary flight — see flightLookup for how a flight is resolved for status checks. */
   flight?: FlightInfo;
   custom?: CustomStop;
+  /** Done / skipped, as the user confirmed once the activity's time came — absent until then. */
+  status?: ActivityStatus;
   editable: EditRef;
   noteEditable: NoteRef;
 }
@@ -147,6 +151,11 @@ interface DisplayStop {
 /** The stop as a Flight (see src/lib/flights.ts), or null if it isn't one. Uses the stop's effective date/time, so a user's edits are respected. */
 function flightOf(stop: DisplayStop): Flight | null {
   return buildFlight({ date: stop.editable.date, time: stop.time, flight: stop.flight, custom: stop.custom });
+}
+
+/** Any flight step — one with a flight number, or one like "Land at DFW" — runs on the airline's clock: no done/skipped prompt, never shifted by a suggestion. */
+function isFlightStep(stop: DisplayStop): boolean {
+  return stop.kind === "flight" || flightOf(stop) !== null;
 }
 
 /** Flights get checked automatically from a day before departure until a few hours after. */
@@ -227,6 +236,7 @@ function staticRefToDisplay(
       photoCaption: override?.photoCaption ?? null,
       weatherLocationName: stop.weatherLocationName,
       flight: stop.flight,
+      status: override?.status,
       editable: { kind: "static", id: ref.id, date: effectiveDate, time: effectiveTimeHHMM },
       noteEditable: { kind: "static", id: ref.id },
     },
@@ -242,6 +252,7 @@ function staticRefToDisplay(
  */
 function customToDisplayEntries(
   stop: CustomStop,
+  overrides: Record<string, StopOverride>,
   utcOffset: string,
   timezoneLabel: string,
 ): { forDate: string; entry: DisplayStop }[] {
@@ -262,6 +273,7 @@ function customToDisplayEntries(
         photoUrl: stop.photoUrl ?? null,
         photoCaption: stop.photoCaption ?? null,
         custom: stop,
+        status: overrides[`custom-${stop.id}-start`]?.status,
         editable: { kind: "custom-start", customId: stop.id, date: stop.date, time: stop.time ?? "" },
         noteEditable: { kind: "custom", customId: stop.id },
       },
@@ -287,6 +299,7 @@ function customToDisplayEntries(
         photoUrl: stop.photoUrl ?? null,
         photoCaption: stop.photoCaption ?? null,
         custom: stop,
+        status: overrides[`custom-${stop.id}-end`]?.status,
         editable: { kind: "custom-end", customId: stop.id, date: stop.endDate, time: stop.endTime ?? "" },
         noteEditable: { kind: "custom", customId: stop.id },
       },
@@ -306,7 +319,7 @@ function daysWithDisplayStops(
   const staticEntries = getAllStaticStopRefs(days)
     .filter((ref) => !overrides[ref.id]?.deleted)
     .map((ref) => staticRefToDisplay(ref, overrides[ref.id], timezoneLabel));
-  const customEntries = customStops.flatMap((s) => customToDisplayEntries(s, utcOffset, timezoneLabel));
+  const customEntries = customStops.flatMap((s) => customToDisplayEntries(s, overrides, utcOffset, timezoneLabel));
   const allEntries = [...staticEntries, ...customEntries];
 
   return days.map((day) => {
@@ -710,6 +723,17 @@ export function TripView({
     });
   }
 
+  /** Done / skipped for one activity (null clears it). Keyed by the display id, synced and backed up like other edits. */
+  function setStopStatus(stopId: string, status: ActivityStatus | null) {
+    setOverrides((prev) => {
+      const next = { ...prev, [stopId]: { ...prev[stopId], status: status ?? undefined } };
+      saveStopOverrides(trip.id, next);
+      overridesRef.current = next;
+      void pushToCloud(customStopsRef.current, next);
+      return next;
+    });
+  }
+
   /** Day-level entries use the key `day${index}` — same position-based scheme as stop ids, so a date shift doesn't orphan the link. */
   function editDayRoute(dayIndex: number, routeUrl: string | null) {
     const id = `day${dayIndex}`;
@@ -747,7 +771,8 @@ export function TripView({
     () => daysWithDisplayStops(days, customStops, overrides, trip.timezoneOffset, trip.timezoneLabel),
     [days, customStops, overrides, trip.timezoneOffset, trip.timezoneLabel],
   );
-  const timed = flattenTimedStops(daysWithStops);
+  // A skipped activity is never "current" or "next".
+  const timed = flattenTimedStops(daysWithStops).filter((e) => e.stop.status !== "skipped");
 
   let phase: "before" | "during" | "after" | "unknown" = "unknown";
   let current: FlatStop | undefined;
@@ -955,6 +980,7 @@ export function TripView({
               onEditNote={handleNoteEdit}
               onEditTitle={handleTitleEdit}
               onEditPhoto={handlePhotoEdit}
+              onSetStatus={setStopStatus}
             />
           ))}
         </div>
@@ -1044,6 +1070,7 @@ function DaySection({
   onEditNote,
   onEditTitle,
   onEditPhoto,
+  onSetStatus,
 }: {
   day: TripDay;
   stops: DisplayStop[];
@@ -1063,8 +1090,11 @@ function DaySection({
   onEditNote: (ref: NoteRef, note: string) => void;
   onEditTitle: (ref: NoteRef, title: string) => void;
   onEditPhoto: (ref: NoteRef, photoUrl: string, photoCaption: string) => void;
+  onSetStatus: (stopId: string, status: ActivityStatus | null) => void;
 }) {
   const [open, setOpen] = useState(isActive);
+  /** An activity the user just moved later, whose delay may push back the rest of the day — see the suggestion under it. */
+  const [lateMove, setLateMove] = useState<{ stopId: string; movedFromIso: string; delayMinutes: number; key: number } | null>(null);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -1164,7 +1194,7 @@ function DaySection({
                 return (
                   <li
                     key={stop.id}
-                    className={`rounded-xl border-l-[3px] p-3 transition-colors ${
+                    className={`rounded-xl border-l-[3px] p-3 transition-colors ${stop.status ? "opacity-60" : ""} ${
                       stop.id === currentStopId
                         ? "border-l-brand-green-500 bg-brand-green-50/70 ring-1 ring-brand-green-200"
                         : "border-l-transparent bg-slate-50 hover:bg-slate-100/70"
@@ -1178,7 +1208,7 @@ function DaySection({
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <p className="text-xs font-medium text-slate-400">{stop.timeLabel}</p>
-                            <p className="font-semibold leading-snug text-slate-900">
+                            <p className={`font-semibold leading-snug ${stop.status === "skipped" ? "text-slate-500 line-through" : stop.status === "done" ? "text-slate-500" : "text-slate-900"}`}>
                               {stop.title}
                               {stop.custom && (
                                 <span className="ml-2 inline-block rounded-full bg-brand-blue-50 px-1.5 py-0.5 align-middle text-[10px] font-medium text-brand-blue-600">
@@ -1292,6 +1322,36 @@ function DaySection({
                           />
                         )}
 
+                        {!isFlightStep(stop) && (
+                          <ActivityStatusRow
+                            status={stop.status}
+                            due={now !== null && stop.time !== null && Date.parse(stop.time) <= now.getTime()}
+                            onSet={(status) => onSetStatus(stop.id, status)}
+                            onMoved={() => setEditingId(stop.id)}
+                          />
+                        )}
+                        {lateMove?.stopId === stop.id && (
+                          <DelaySuggestion
+                            key={lateMove.key}
+                            label={stop.title}
+                            delayMinutes={lateMove.delayMinutes}
+                            changes={proposeFollowingShift({
+                              movedFromIso: lateMove.movedFromIso,
+                              delayMinutes: lateMove.delayMinutes,
+                              untilIso: stops.find((s) => isFlightStep(s) && s.time && Date.parse(s.time) > Date.parse(lateMove.movedFromIso))?.time,
+                              stops: stops
+                                .filter((s) => s.id !== stop.id && !isFlightStep(s) && !s.status)
+                                .map((s) => ({ id: s.id, title: s.title, time: s.time })),
+                            })}
+                            onAccept={(accepted) => {
+                              for (const change of accepted) {
+                                const target = stops.find((s) => s.id === change.id);
+                                if (target) onEditStop(target.editable, change.newTime.slice(0, 10), change.newTime.slice(11, 16));
+                              }
+                            }}
+                          />
+                        )}
+
                         {stop.description && <p className="mt-1 text-sm leading-relaxed text-slate-600">{stop.description}</p>}
                         {stop.phone && <p className="mt-1 text-sm text-slate-500">📞 {stop.phone}</p>}
                         {stop.cost && <p className="mt-1 text-sm text-slate-500">💰 {stop.cost}</p>}
@@ -1390,6 +1450,8 @@ function DaySection({
                         onSave={(date, time) => {
                           onEditStop(stop.editable, date, time);
                           setEditingId(null);
+                          const delayMinutes = isFlightStep(stop) ? null : laterOnSameDayMinutes(stop.time, date, time);
+                          setLateMove(delayMinutes && stop.time ? { stopId: stop.id, movedFromIso: stop.time, delayMinutes, key: Date.now() } : null);
                         }}
                         onCancel={() => setEditingId(null)}
                       />
@@ -1458,5 +1520,50 @@ function DaySection({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Once an activity's time has come: "How did it go?" — done, skipped, or
+ * moved to a new time (which opens the time editor and, if later, suggests
+ * moving the rest of the day). After an answer, a short status with Undo.
+ */
+function ActivityStatusRow({
+  status,
+  due,
+  onSet,
+  onMoved,
+}: {
+  status?: ActivityStatus;
+  due: boolean;
+  onSet: (status: ActivityStatus | null) => void;
+  onMoved: () => void;
+}) {
+  if (status) {
+    return (
+      <p className={`mt-1.5 flex items-center gap-2 text-xs font-semibold ${status === "done" ? "text-brand-green-700" : "text-slate-500"}`}>
+        {status === "done" ? "✅ Completed" : "⏭️ Skipped"}
+        <button onClick={() => onSet(null)} className="font-medium text-slate-400 underline hover:text-slate-600">
+          Undo
+        </button>
+      </p>
+    );
+  }
+  if (!due) return null;
+
+  const buttonClass = "whitespace-nowrap rounded-full border bg-white px-2.5 py-1 text-[11px] font-semibold shadow-sm transition-all active:scale-95";
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg bg-white/70 px-2 py-1.5 ring-1 ring-slate-200">
+      <span className="text-[11px] font-semibold text-slate-500">How did it go?</span>
+      <button onClick={() => onSet("done")} className={`${buttonClass} border-brand-green-300 text-brand-green-700 hover:bg-brand-green-50`}>
+        ✅ Done
+      </button>
+      <button onClick={() => onSet("skipped")} className={`${buttonClass} border-slate-300 text-slate-600 hover:bg-slate-50`}>
+        ⏭️ Skipped
+      </button>
+      <button onClick={onMoved} className={`${buttonClass} border-amber-300 text-amber-700 hover:bg-amber-50`}>
+        🕒 Moved
+      </button>
+    </div>
   );
 }

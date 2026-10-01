@@ -128,7 +128,7 @@ const TIME = /^\d{2}:\d{2}$/;
 const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
 const OFFSET = /^[+-]\d{2}:\d{2}$/;
 /** Day-level keys ("day0"), stop keys ("day0-stop3"), and the older date-based stop keys ("2026-09-27-3"). */
-const OVERRIDE_KEY = /^(prep|day\d{1,3}(-stop\d{1,3})?|\d{4}-\d{2}-\d{2}-\d{1,3})$/;
+const OVERRIDE_KEY = /^(prep|custom-[a-z0-9-]{1,80}-(start|end)|day\d{1,3}(-stop\d{1,3})?|\d{4}-\d{2}-\d{2}-\d{1,3})$/;
 const IMAGE_HOSTS = new Set(["images.pexels.com", "picsum.photos"]);
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -235,6 +235,7 @@ function sanitizeOverride(value: unknown): StopOverride | null {
     override.routeUrl = url;
   }
   if ("checklist" in value) override.checklist = sanitizeChecklist(value.checklist);
+  if (value.status === "done" || value.status === "skipped") override.status = value.status;
   return override;
 }
 
