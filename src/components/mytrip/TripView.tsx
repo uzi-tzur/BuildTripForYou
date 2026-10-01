@@ -153,9 +153,19 @@ function flightOf(stop: DisplayStop): Flight | null {
   return buildFlight({ date: stop.editable.date, time: stop.time, flight: stop.flight, custom: stop.custom });
 }
 
-/** Any flight step — one with a flight number, or one like "Land at DFW" — runs on the airline's clock: no done/skipped prompt, never shifted by a suggestion. */
+/** Any flight step — one with a flight number, or one like "Land at DFW" — runs on the airline's clock, so a suggestion never shifts it (its delays come from the flight status check). */
 function isFlightStep(stop: DisplayStop): boolean {
   return stop.kind === "flight" || flightOf(stop) !== null;
+}
+
+/**
+ * When to ask "How did it go?": once a timed activity has started, or — for
+ * one without a set time ("Late afternoon") — from the start of its day.
+ */
+function isDue(stop: DisplayStop, now: Date | null): boolean {
+  if (!now) return false;
+  const startsAt = stop.time ? Date.parse(stop.time) : new Date(`${stop.editable.date}T00:00:00`).getTime();
+  return !Number.isNaN(startsAt) && startsAt <= now.getTime();
 }
 
 /** Flights get checked automatically from a day before departure until a few hours after. */
@@ -1322,14 +1332,12 @@ function DaySection({
                           />
                         )}
 
-                        {!isFlightStep(stop) && (
-                          <ActivityStatusRow
-                            status={stop.status}
-                            due={now !== null && stop.time !== null && Date.parse(stop.time) <= now.getTime()}
-                            onSet={(status) => onSetStatus(stop.id, status)}
-                            onMoved={() => setEditingId(stop.id)}
-                          />
-                        )}
+                        <ActivityStatusRow
+                          status={stop.status}
+                          due={isDue(stop, now)}
+                          onSet={(status) => onSetStatus(stop.id, status)}
+                          onMoved={() => setEditingId(stop.id)}
+                        />
                         {lateMove?.stopId === stop.id && (
                           <DelaySuggestion
                             key={lateMove.key}
