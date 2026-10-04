@@ -2,13 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { AddActivityForm } from "@/components/mytrip/AddActivityForm";
 import { DriveTime } from "@/components/mytrip/DriveTime";
 import { EditNoteForm } from "@/components/mytrip/EditNoteForm";
 import { EditTimeForm } from "@/components/mytrip/EditTimeForm";
 import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
 import { ItineraryExport } from "@/components/mytrip/ItineraryExport";
+import { TripSummary } from "@/components/mytrip/TripSummary";
 import { DelaySuggestion } from "@/components/mytrip/DelaySuggestion";
 import { TripTimeZoneRow } from "@/components/mytrip/TripTimeZoneRow";
 import { FlightDelayBanner } from "@/components/mytrip/FlightDelayBanner";
@@ -21,6 +22,7 @@ import { buildFlight, flightLabel, flightRoute, type Flight } from "@/lib/flight
 import { EditDayRouteForm } from "@/components/mytrip/EditDayRouteForm";
 import { PrepChecklist } from "@/components/mytrip/PrepChecklist";
 import { PREP_CHECKLIST_KEY, sanitizeChecklist, type ChecklistItem } from "@/lib/prepChecklist";
+import { TRIP_SUMMARY_KEY, sanitizeSummaryText, type TripSummaryInput, type TripSummaryText } from "@/lib/tripSummary";
 import { PhotoSearchForm } from "@/components/mytrip/PhotoSearchForm";
 import { Chevron } from "@/components/ui/Chevron";
 import { DemoBadge } from "@/components/ui/DemoBadge";
@@ -501,6 +503,7 @@ export function TripView({
   const [overrides, setOverrides] = useState<Record<string, StopOverride>>({});
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [exporting, setExporting] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const customStopsRef = useRef<CustomStop[]>([]);
   const overridesRef = useRef<Record<string, StopOverride>>({});
@@ -731,6 +734,17 @@ export function TripView({
     });
   }
 
+  /** The trip summary's infographic (uploaded image and/or the text of the drawn one), kept in the overrides like the checklist. */
+  function editSummary(changes: { infographicUrl?: string | null; summaryText?: TripSummaryText }) {
+    setOverrides((prev) => {
+      const next = { ...prev, [TRIP_SUMMARY_KEY]: { ...prev[TRIP_SUMMARY_KEY], ...changes } };
+      saveStopOverrides(trip.id, next);
+      overridesRef.current = next;
+      void pushToCloud(customStopsRef.current, next);
+      return next;
+    });
+  }
+
   /** Done / skipped for one activity (null clears it). Keyed by the display id, synced and backed up like other edits. */
   function setStopStatus(stopId: string, status: ActivityStatus | null) {
     setOverrides((prev) => {
@@ -778,6 +792,30 @@ export function TripView({
   const daysWithStops = useMemo(
     () => daysWithDisplayStops(days, customStops, overrides, trip.timezoneOffset, trip.timezoneLabel),
     [days, customStops, overrides, trip.timezoneOffset, trip.timezoneLabel],
+  );
+  const summaryInput = useMemo(
+    (): TripSummaryInput => ({
+      trip: {
+        name: trip.name,
+        subtitle: trip.subtitle,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        heroImage: trip.heroImage,
+      },
+      days: daysWithStops.map(({ day, stops }) => ({
+        date: day.date,
+        title: day.title,
+        stops: stops.map((stop) => ({
+          title: stop.title,
+          kind: stop.kind,
+          icon: stop.icon,
+          photoUrl: stop.photoUrl ?? null,
+          skipped: stop.status === "skipped",
+          isFlight: flightOf(stop) !== null,
+        })),
+      })),
+    }),
+    [trip.name, trip.subtitle, trip.startDate, trip.endDate, trip.heroImage, daysWithStops],
   );
   // A skipped activity is never "current" or "next".
   const timed = flattenTimedStops(daysWithStops).filter((e) => e.stop.status !== "skipped");
@@ -845,6 +883,10 @@ export function TripView({
       })),
     };
   }
+
+  const closeSummary = useCallback(() => setSummarizing(false), []);
+  const savedSummaryText = overrides[TRIP_SUMMARY_KEY]?.summaryText;
+  const summaryText = useMemo(() => sanitizeSummaryText(savedSummaryText), [savedSummaryText]);
 
   const daysUntil = now && timed.length > 0 ? daysUntilDate(trip.startDate, now) : null;
 
@@ -921,6 +963,12 @@ export function TripView({
           className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:border-brand-blue-300 hover:text-brand-blue-700 active:scale-[0.99]"
         >
           📄 Export &amp; share itinerary
+        </button>
+        <button
+          onClick={() => setSummarizing(true)}
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:border-brand-blue-300 hover:text-brand-blue-700 active:scale-[0.99]"
+        >
+          📊 Trip summary &amp; infographic
         </button>
         {trip.subtitle && <p className="mt-3 text-[15px] leading-relaxed text-slate-600">{trip.subtitle}</p>}
 
@@ -1001,6 +1049,16 @@ export function TripView({
         </div>
       </div>
       {exporting && <ItineraryExport input={buildItineraryInput()} onClose={() => setExporting(false)} />}
+      {summarizing && (
+        <TripSummary
+          input={summaryInput}
+          infographicUrl={overrides[TRIP_SUMMARY_KEY]?.infographicUrl ?? null}
+          text={summaryText}
+          onSaveInfographic={(infographicUrl) => editSummary({ infographicUrl })}
+          onSaveText={(summaryText) => editSummary({ summaryText })}
+          onClose={closeSummary}
+        />
+      )}
     </main>
   );
 }
