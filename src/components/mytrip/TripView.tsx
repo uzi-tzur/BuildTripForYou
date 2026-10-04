@@ -865,7 +865,7 @@ export function TripView({
           </>
         )}
 
-        <div className={trip.heroImage ? "absolute inset-x-0 top-0 flex items-center justify-between p-4" : "flex items-center justify-between"}>
+        <div className={trip.heroImage ? "absolute inset-x-0 top-0 z-10 flex items-center justify-between p-4" : "flex items-center justify-between"}>
           <Link
             href="/my-trip"
             className="flex items-center gap-1.5 rounded-full bg-black/25 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/35"
