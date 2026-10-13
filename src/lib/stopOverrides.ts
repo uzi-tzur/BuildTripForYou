@@ -23,6 +23,8 @@ export interface StopOverride {
   deleted?: boolean;
   photoUrl?: string | null;
   photoCaption?: string | null;
+  /** The activity's own website (tickets, menu, park page…) — opened in one tap from the activity. */
+  websiteUrl?: string | null;
   /**
    * Only used on a day-level entry (key `day${dayIndex}`, not a stop id): a
    * Google Maps directions link the user pasted for that whole day. Stored
@@ -51,6 +53,25 @@ export function isValidGoogleMapsUrl(raw: string): boolean {
     return isGoogleHost && url.pathname.startsWith("/maps");
   } catch {
     return false;
+  }
+}
+
+/**
+ * A website link the user typed for an activity, made clickable: "example.com"
+ * becomes "https://example.com". Only http(s) links are kept — this is rendered
+ * as an href, so anything else (e.g. a javascript: URL) gives null.
+ */
+export function normalizeWebsiteUrl(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > 2000) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const url = new URL(withScheme);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    if (!url.hostname.includes(".")) return null;
+    return url.href;
+  } catch {
+    return null;
   }
 }
 

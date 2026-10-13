@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isValidGoogleMapsUrl } from "@/lib/stopOverrides";
+import { isValidGoogleMapsUrl, normalizeWebsiteUrl } from "@/lib/stopOverrides";
 
 describe("isValidGoogleMapsUrl", () => {
   it("accepts a full multi-stop directions link", () => {
@@ -21,5 +21,20 @@ describe("isValidGoogleMapsUrl", () => {
     expect(isValidGoogleMapsUrl("https://evil.example.com/maps/dir/a/b")).toBe(false);
     expect(isValidGoogleMapsUrl("https://www.google.com/url?q=https://evil.example.com")).toBe(false);
     expect(isValidGoogleMapsUrl("not a url")).toBe(false);
+  });
+});
+
+describe("normalizeWebsiteUrl", () => {
+  it("keeps http(s) links and adds https:// to a bare domain", () => {
+    expect(normalizeWebsiteUrl("https://www.nps.gov/romo/index.htm")).toBe("https://www.nps.gov/romo/index.htm");
+    expect(normalizeWebsiteUrl("  nps.gov/romo ")).toBe("https://nps.gov/romo");
+    expect(normalizeWebsiteUrl("http://example.com")).toBe("http://example.com/");
+  });
+
+  it("rejects non-web links and junk", () => {
+    expect(normalizeWebsiteUrl("javascript:alert(1)")).toBeNull();
+    expect(normalizeWebsiteUrl("data:text/html,hi")).toBeNull();
+    expect(normalizeWebsiteUrl("not a link")).toBeNull();
+    expect(normalizeWebsiteUrl("")).toBeNull();
   });
 });

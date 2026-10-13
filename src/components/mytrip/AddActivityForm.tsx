@@ -9,6 +9,7 @@ import {
   type CustomStop,
   type CustomStopCategory,
 } from "@/lib/customStops";
+import { normalizeWebsiteUrl } from "@/lib/stopOverrides";
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm transition-colors focus:border-brand-blue-500 focus:outline-none focus:ring-2 focus:ring-brand-blue-100";
@@ -37,6 +38,7 @@ export function AddActivityForm({
   const [endTime, setEndTime] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
+  const [website, setWebsite] = useState("");
   const [notes, setNotes] = useState("");
   const [airport, setAirport] = useState("");
   const [airline, setAirline] = useState("");
@@ -59,6 +61,12 @@ export function AddActivityForm({
       return;
     }
 
+    const websiteUrl = website.trim() ? normalizeWebsiteUrl(website) : null;
+    if (website.trim() && !websiteUrl) {
+      setError("That doesn't look like a website link — e.g. https://www.nps.gov/romo");
+      return;
+    }
+
     try {
       onAdd({
         id: generateStopId(),
@@ -71,6 +79,7 @@ export function AddActivityForm({
         address: address.trim() || null,
         phone: phone.trim() || null,
         notes: notes.trim() || null,
+        websiteUrl,
         airport: isAirport ? airport.trim() || null : null,
         airline: isAirport ? airline.trim() || null : null,
         flightNumber: isAirport ? flightNumber.trim().toUpperCase() || null : null,
@@ -187,6 +196,14 @@ export function AddActivityForm({
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
         placeholder="Phone number (optional — enables Call)"
+        className={inputClass}
+      />
+      <input
+        type="text"
+        inputMode="url"
+        value={website}
+        onChange={(e) => setWebsite(e.target.value)}
+        placeholder="Website (optional — one tap to open it)"
         className={inputClass}
       />
       <textarea

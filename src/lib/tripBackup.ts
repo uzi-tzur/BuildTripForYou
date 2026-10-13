@@ -20,7 +20,7 @@ import {
 import { sanitizeChecklist } from "@/lib/prepChecklist";
 import { isTripPhotoUrl } from "@/lib/tripPhotos";
 import { sanitizeSummaryText } from "@/lib/tripSummary";
-import { isValidGoogleMapsUrl, loadStopOverrides, saveStopOverrides, type StopOverride } from "@/lib/stopOverrides";
+import { isValidGoogleMapsUrl, loadStopOverrides, normalizeWebsiteUrl, saveStopOverrides, type StopOverride } from "@/lib/stopOverrides";
 import { loadAllTrips, restoreTrip, SEED_TRIP, type TripMeta } from "@/lib/trips";
 
 export type BackupReason = "manual" | "before-delete";
@@ -151,6 +151,10 @@ function remoteImage(value: unknown): string | null {
   }
 }
 
+function websiteUrl(value: unknown): string | null {
+  return typeof value === "string" ? normalizeWebsiteUrl(value) : null;
+}
+
 function heroImage(value: unknown): string | null {
   if (typeof value === "string" && value.startsWith("/") && !value.startsWith("//")) return value;
   return remoteImage(value);
@@ -211,6 +215,7 @@ function sanitizeCustomStop(value: unknown): CustomStop | null {
     notes: text(value.notes, 5000),
     photoUrl: remoteImage(value.photoUrl),
     photoCaption: text(value.photoCaption, 200),
+    websiteUrl: websiteUrl(value.websiteUrl),
     airport: text(value.airport, 100),
     airline: text(value.airline, 100),
     flightNumber: text(value.flightNumber, 20),
@@ -231,6 +236,7 @@ function sanitizeOverride(value: unknown): StopOverride | null {
   if (value.deleted === true) override.deleted = true;
   if ("photoUrl" in value) override.photoUrl = remoteImage(value.photoUrl);
   if ("photoCaption" in value) override.photoCaption = text(value.photoCaption, 200);
+  if ("websiteUrl" in value) override.websiteUrl = websiteUrl(value.websiteUrl);
   if ("routeUrl" in value) {
     const url = typeof value.routeUrl === "string" && value.routeUrl.length <= 4000 && isValidGoogleMapsUrl(value.routeUrl) ? value.routeUrl : null;
     override.routeUrl = url;

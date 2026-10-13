@@ -8,6 +8,7 @@ import { DriveTime } from "@/components/mytrip/DriveTime";
 import { EditNoteForm } from "@/components/mytrip/EditNoteForm";
 import { EditTimeForm } from "@/components/mytrip/EditTimeForm";
 import { EditTitleForm } from "@/components/mytrip/EditTitleForm";
+import { EditWebsiteForm } from "@/components/mytrip/EditWebsiteForm";
 import { ItineraryExport } from "@/components/mytrip/ItineraryExport";
 import { TripSummary } from "@/components/mytrip/TripSummary";
 import { DelaySuggestion } from "@/components/mytrip/DelaySuggestion";
@@ -37,7 +38,7 @@ import {
 } from "@/lib/customStops";
 import { celsiusToFahrenheit, formatDateUS, weatherKey } from "@/lib/format";
 import { cloudSyncAvailable, pullTripSync, pushTripSync } from "@/lib/mytripSync";
-import { extractUtcOffset, loadStopOverrides, saveStopOverrides, type StopOverride } from "@/lib/stopOverrides";
+import { extractUtcOffset, loadStopOverrides, normalizeWebsiteUrl, saveStopOverrides, type StopOverride } from "@/lib/stopOverrides";
 import type { TripMeta } from "@/lib/trips";
 import type { WeatherCondition } from "@/lib/types";
 
@@ -135,6 +136,8 @@ interface DisplayStop {
   /** A photo the user picked for this stop via image search — never itinerary data. */
   photoUrl?: string | null;
   photoCaption?: string | null;
+  /** The activity's website the user linked — never itinerary data. */
+  websiteUrl?: string | null;
   /** Matches a name in the day's weatherLocations — set only on outdoor/town stops. */
   weatherLocationName?: string;
   /** Set only on an itinerary flight — see flightLookup for how a flight is resolved for status checks. */
@@ -239,6 +242,7 @@ function staticRefToDisplay(
       personalNote: override?.note ?? null,
       photoUrl: override?.photoUrl ?? null,
       photoCaption: override?.photoCaption ?? null,
+      websiteUrl: override?.websiteUrl ?? null,
       weatherLocationName: stop.weatherLocationName,
       flight: stop.flight,
       status: override?.status,
@@ -277,6 +281,7 @@ function customToDisplayEntries(
         personalNote: stop.notes,
         photoUrl: stop.photoUrl ?? null,
         photoCaption: stop.photoCaption ?? null,
+        websiteUrl: stop.websiteUrl ?? null,
         custom: stop,
         status: overrides[`custom-${stop.id}-start`]?.status,
         editable: { kind: "custom-start", customId: stop.id, date: stop.date, time: stop.time ?? "" },
@@ -303,6 +308,7 @@ function customToDisplayEntries(
         personalNote: stop.notes,
         photoUrl: stop.photoUrl ?? null,
         photoCaption: stop.photoCaption ?? null,
+        websiteUrl: stop.websiteUrl ?? null,
         custom: stop,
         status: overrides[`custom-${stop.id}-end`]?.status,
         editable: { kind: "custom-end", customId: stop.id, date: stop.endDate, time: stop.endTime ?? "" },
@@ -768,6 +774,31 @@ export function TripView({
     });
   }
 
+  function editStaticWebsite(id: string, websiteUrl: string | null) {
+    setOverrides((prev) => {
+      const next = { ...prev, [id]: { ...prev[id], websiteUrl } };
+      saveStopOverrides(trip.id, next);
+      overridesRef.current = next;
+      void pushToCloud(customStopsRef.current, next);
+      return next;
+    });
+  }
+
+  function editCustomStopWebsite(customId: string, websiteUrl: string | null) {
+    setCustomStops((prev) => {
+      const next = prev.map((s) => (s.id === customId ? { ...s, websiteUrl } : s));
+      saveCustomStops(trip.id, next);
+      customStopsRef.current = next;
+      void pushToCloud(next, overridesRef.current);
+      return next;
+    });
+  }
+
+  function handleWebsiteEdit(ref: NoteRef, websiteUrl: string | null) {
+    if (ref.kind === "static") editStaticWebsite(ref.id, websiteUrl);
+    else editCustomStopWebsite(ref.customId, websiteUrl);
+  }
+
   function handlePhotoEdit(ref: NoteRef, photoUrl: string, photoCaption: string) {
     if (ref.kind === "static") editStaticPhoto(ref.id, photoUrl, photoCaption);
     else editCustomStopPhoto(ref.customId, photoUrl, photoCaption);
@@ -1043,6 +1074,7 @@ export function TripView({
               onEditNote={handleNoteEdit}
               onEditTitle={handleTitleEdit}
               onEditPhoto={handlePhotoEdit}
+              onEditWebsite={handleWebsiteEdit}
               onSetStatus={setStopStatus}
             />
           ))}
@@ -1149,6 +1181,7 @@ function DaySection({
   onEditNote,
   onEditTitle,
   onEditPhoto,
+  onEditWebsite,
   onSetStatus,
 }: {
   day: TripDay;
@@ -1170,6 +1203,7 @@ function DaySection({
   onEditNote: (ref: NoteRef, note: string) => void;
   onEditTitle: (ref: NoteRef, title: string) => void;
   onEditPhoto: (ref: NoteRef, photoUrl: string, photoCaption: string) => void;
+  onEditWebsite: (ref: NoteRef, websiteUrl: string | null) => void;
   onSetStatus: (stopId: string, status: ActivityStatus | null) => void;
 }) {
   const [open, setOpen] = useState(isActive);
@@ -1180,6 +1214,7 @@ function DaySection({
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
+  const [editingWebsiteId, setEditingWebsiteId] = useState<string | null>(null);
   const [checkingWeatherId, setCheckingWeatherId] = useState<string | null>(null);
   const [checkingFlightId, setCheckingFlightId] = useState<string | null>(null);
   const [editingRoute, setEditingRoute] = useState(false);
@@ -1286,6 +1321,9 @@ function DaySection({
                 const isEditingNote = editingNoteId === stop.id;
                 const isEditingTitle = editingTitleId === stop.id;
                 const isEditingPhoto = editingPhotoId === stop.id;
+                const isEditingWebsite = editingWebsiteId === stop.id;
+                // Re-checked here too: synced trips arrive from the cloud without going through the backup sanitizer.
+                const websiteUrl = stop.websiteUrl ? normalizeWebsiteUrl(stop.websiteUrl) : null;
                 const isCheckingWeather = checkingWeatherId === stop.id;
                 const flight = flightOf(stop);
                 const autoCheckFlight = flight !== null && isInFlightCheckWindow(flight.scheduledDeparture, now);
@@ -1470,6 +1508,16 @@ function DaySection({
                         )}
 
                         <div className="mt-2.5 flex flex-wrap gap-2">
+                          {websiteUrl && (
+                            <a
+                              href={websiteUrl}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="whitespace-nowrap rounded-full bg-brand-green-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-brand-green-600 active:scale-95"
+                            >
+                              🌐 Website
+                            </a>
+                          )}
                           {stop.phone && (
                             <a
                               href={`tel:${stop.phone.replace(/[^\d+]/g, "")}`}
@@ -1530,6 +1578,12 @@ function DaySection({
                             🖼️ Image Search
                           </button>
                           <button
+                            onClick={() => setEditingWebsiteId(isEditingWebsite ? null : stop.id)}
+                            className="whitespace-nowrap rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-all hover:border-brand-blue-300 hover:text-brand-blue-700 active:scale-95"
+                          >
+                            🔗 {websiteUrl ? "Edit Link" : "Add Link"}
+                          </button>
+                          <button
                             onClick={() => onRemoveStop(stop.noteEditable)}
                             aria-label="Remove this activity"
                             className="whitespace-nowrap rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-500 transition-all hover:border-red-400 hover:text-red-500 active:scale-95"
@@ -1578,6 +1632,18 @@ function DaySection({
                           setEditingTitleId(null);
                         }}
                         onCancel={() => setEditingTitleId(null)}
+                      />
+                    )}
+
+                    {isEditingWebsite && (
+                      <EditWebsiteForm
+                        label={stop.baseTitle}
+                        initialUrl={websiteUrl ?? ""}
+                        onSave={(url) => {
+                          onEditWebsite(stop.noteEditable, url);
+                          setEditingWebsiteId(null);
+                        }}
+                        onCancel={() => setEditingWebsiteId(null)}
                       />
                     )}
 

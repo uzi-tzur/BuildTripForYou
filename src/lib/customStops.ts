@@ -67,6 +67,8 @@ export interface CustomStop {
   notes: string | null;
   photoUrl?: string | null;
   photoCaption?: string | null;
+  /** The activity's own website — see normalizeWebsiteUrl in stopOverrides.ts. */
+  websiteUrl?: string | null;
   /** Only meaningful for category "airport" — departure airport code/name, e.g. "DEN". */
   airport?: string | null;
   airline?: string | null;
