@@ -9,6 +9,7 @@ import { pushTripToCloud } from "@/lib/tripListSync";
 import { getTripDays, loadAllTrips, markTripSynced, updateTrip, type TripMeta } from "@/lib/trips";
 import type { WeatherCondition } from "@/lib/types";
 import type { WeatherPlace } from "@/lib/weatherPlace";
+import { placeTimeZone, tripTimeZoneFields } from "@/lib/timeZones";
 
 export function TripPageClient({ tripId }: { tripId: string }) {
   const [trip, setTrip] = useState<TripMeta | null | undefined>(undefined); // undefined = loading
@@ -55,10 +56,17 @@ export function TripPageClient({ tripId }: { tripId: string }) {
     });
   }
 
-  /** Saves the place, fills every day with it and loads its forecast right away. */
+  /**
+   * Saves the place, fills every day with it and loads its forecast right
+   * away. Picking a place in another country's time zone ("Tokyo, JP")
+   * also moves the trip to that zone, so entered times read as local
+   * times there — their digits stay the same.
+   */
   function handleChangeWeatherLocation(weatherLocation: WeatherPlace) {
     if (!trip) return;
-    const updated = updateTrip(trip.id, { weatherLocation });
+    const zone = placeTimeZone(weatherLocation.name);
+    const zoneFields = zone && zone.label !== trip.timezoneLabel ? tripTimeZoneFields(zone, trip.startDate) : {};
+    const updated = updateTrip(trip.id, { weatherLocation, ...zoneFields });
     setTrip(updated);
     const tripDays = getTripDays(updated);
     setDays(tripDays);

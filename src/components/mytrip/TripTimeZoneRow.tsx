@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { TRIP_TIME_ZONES, tripTimeZoneFields } from "@/lib/timeZones";
+import { TRIP_TIME_ZONES, tripTimeZoneFields, type TripTimeZone } from "@/lib/timeZones";
 
 /**
  * "🕒 Times are in Central time · Change" — the trip's time zone, which the
@@ -12,11 +12,14 @@ export function TripTimeZoneRow({
   timezoneLabel,
   timezoneOffset,
   startDate,
+  suggestedZone,
   onChange,
 }: {
   timezoneLabel: string;
   timezoneOffset: string;
   startDate: string;
+  /** The weather place's zone, offered as a one-tap switch when the trip is in another one. */
+  suggestedZone?: TripTimeZone | null;
   onChange: (timezoneOffset: string, timezoneLabel: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -24,22 +27,39 @@ export function TripTimeZoneRow({
   const [choice, setChoice] = useState(current?.id ?? "");
 
   if (!editing) {
+    const offerSwitch = suggestedZone && suggestedZone.label !== timezoneLabel;
     return (
-      <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500">
-        <span>
-          🕒 Times are in <span className="font-semibold text-slate-700">{timezoneLabel}</span>{" "}
-          <span className="text-slate-400">(UTC{timezoneOffset})</span>
-        </span>
-        <button
-          onClick={() => {
-            setChoice(current?.id ?? "");
-            setEditing(true);
-          }}
-          className="shrink-0 rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold text-slate-600 transition-colors hover:border-brand-blue-300 hover:text-brand-blue-700"
-        >
-          Change
-        </button>
-      </div>
+      <>
+        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500">
+          <span>
+            🕒 Times are in <span className="font-semibold text-slate-700">{timezoneLabel}</span>{" "}
+            <span className="text-slate-400">(UTC{timezoneOffset})</span>
+          </span>
+          <button
+            onClick={() => {
+              setChoice(current?.id ?? "");
+              setEditing(true);
+            }}
+            className="shrink-0 rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold text-slate-600 transition-colors hover:border-brand-blue-300 hover:text-brand-blue-700"
+          >
+            Change
+          </button>
+        </div>
+        {offerSwitch && (
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <span>This trip&apos;s weather is for a place on {suggestedZone.label}.</span>
+            <button
+              onClick={() => {
+                const fields = tripTimeZoneFields(suggestedZone, startDate);
+                onChange(fields.timezoneOffset, fields.timezoneLabel);
+              }}
+              className="shrink-0 rounded-full bg-brand-blue-500 px-3 py-1 font-semibold text-white shadow-sm transition-all hover:bg-brand-blue-600 active:scale-95"
+            >
+              Switch to {suggestedZone.label}
+            </button>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -62,7 +82,10 @@ export function TripTimeZoneRow({
           </option>
         ))}
       </select>
-      <p className="text-slate-500">Activity times you entered keep their digits (10:53 PM stays 10:53 PM) and are read in the new time zone.</p>
+      <p className="text-slate-500">
+        Activity times you entered keep their digits (10:53 PM stays 10:53 PM) and are read in the
+        new time zone.
+      </p>
       <div className="flex gap-2">
         <button
           disabled={!chosen}

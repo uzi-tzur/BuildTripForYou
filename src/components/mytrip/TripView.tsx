@@ -15,6 +15,7 @@ import { DelaySuggestion } from "@/components/mytrip/DelaySuggestion";
 import { TripTimeZoneRow } from "@/components/mytrip/TripTimeZoneRow";
 import { DayWeatherControl, WeatherLocationRow } from "@/components/mytrip/WeatherLocationRow";
 import type { WeatherPlace } from "@/lib/weatherPlace";
+import { placeTimeZone } from "@/lib/timeZones";
 import { FlightDelayBanner } from "@/components/mytrip/FlightDelayBanner";
 import { laterOnSameDayMinutes, proposeFollowingShift, type ActivityStatus } from "@/lib/activityImpact";
 import { FlightStatusPanel } from "@/components/mytrip/FlightStatusPanel";
@@ -1003,6 +1004,7 @@ export function TripView({
           timezoneLabel={trip.timezoneLabel}
           timezoneOffset={trip.timezoneOffset}
           startDate={trip.startDate}
+          suggestedZone={trip.weatherLocation ? placeTimeZone(trip.weatherLocation.name) : null}
           onChange={onChangeTimeZone}
         />
         <button
