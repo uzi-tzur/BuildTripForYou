@@ -85,7 +85,7 @@ export const summaryRequestSchema = z.object({
 export type SummaryRequest = z.infer<typeof summaryRequestSchema>;
 
 /** Kinds that are getting somewhere rather than doing something — left out of the "highlights". */
-const LOGISTICS_KINDS = new Set(["flight", "drive", "end"]);
+const LOGISTICS_KINDS = new Set(["flight", "drive", "end", "insurance"]);
 
 function highlights(day: TripSummaryInput["days"][number]): string[] {
   const kept = day.stops.filter((s) => !s.skipped);

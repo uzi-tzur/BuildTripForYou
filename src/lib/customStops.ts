@@ -11,6 +11,7 @@ export const CUSTOM_STOP_CATEGORIES = [
   "city",
   "attraction",
   "airport",
+  "insurance",
   "other",
 ] as const;
 
@@ -24,6 +25,7 @@ export const CUSTOM_STOP_CATEGORY_LABEL: Record<CustomStopCategory, string> = {
   city: "City",
   attraction: "Attraction",
   airport: "Airport",
+  insurance: "Trip Insurance",
   other: "Other",
 };
 
@@ -35,6 +37,7 @@ export const CUSTOM_STOP_CATEGORY_ICON: Record<CustomStopCategory, string> = {
   city: "🏙️",
   attraction: "🎟️",
   airport: "🛫",
+  insurance: "🛡️",
   other: "📌",
 };
 
@@ -51,6 +54,7 @@ export const CUSTOM_STOP_END_LABEL: Record<CustomStopCategory, string> = {
   city: "Depart",
   attraction: "End",
   airport: "Departure",
+  insurance: "Coverage ends",
   other: "End",
 };
 

@@ -40,6 +40,7 @@ import {
   loadCustomStops,
   saveCustomStops,
   type CustomStop,
+  type CustomStopCategory,
 } from "@/lib/customStops";
 import { celsiusToFahrenheit, formatDateUS, weatherKey } from "@/lib/format";
 import { cloudSyncAvailable, pullTripSync, pushTripSync } from "@/lib/mytripSync";
@@ -704,9 +705,9 @@ export function TripView({
     });
   }
 
-  function editCustomStopTitle(customId: string, title: string) {
+  function editCustomStopTitle(customId: string, title: string, category?: CustomStopCategory) {
     setCustomStops((prev) => {
-      const next = prev.map((s) => (s.id === customId ? { ...s, title } : s));
+      const next = prev.map((s) => (s.id === customId ? { ...s, title, ...(category ? { category } : {}) } : s));
       saveCustomStops(trip.id, next);
       customStopsRef.current = next;
       void pushToCloud(next, overridesRef.current);
@@ -714,9 +715,9 @@ export function TripView({
     });
   }
 
-  function handleTitleEdit(ref: NoteRef, title: string) {
+  function handleTitleEdit(ref: NoteRef, title: string, category?: CustomStopCategory) {
     if (ref.kind === "static") editStaticTitle(ref.id, title);
-    else editCustomStopTitle(ref.customId, title);
+    else editCustomStopTitle(ref.customId, title, category);
   }
 
   function editStaticPhoto(id: string, photoUrl: string, photoCaption: string) {
@@ -1245,7 +1246,7 @@ function DaySection({
   onRemoveStop: (ref: NoteRef) => void;
   onEditStop: (ref: EditRef, date: string, time: string) => void;
   onEditNote: (ref: NoteRef, note: string) => void;
-  onEditTitle: (ref: NoteRef, title: string) => void;
+  onEditTitle: (ref: NoteRef, title: string, category?: CustomStopCategory) => void;
   onEditPhoto: (ref: NoteRef, photoUrl: string, photoCaption: string) => void;
   onEditWebsite: (ref: NoteRef, websiteUrl: string | null) => void;
   onSetStatus: (stopId: string, status: ActivityStatus | null) => void;
@@ -1406,7 +1407,7 @@ function DaySection({
                           <div className="flex shrink-0 items-center gap-0.5">
                             <button
                               onClick={() => setEditingTitleId(isEditingTitle ? null : stop.id)}
-                              aria-label="Rename activity"
+                              aria-label={stop.custom ? "Rename or change type" : "Rename activity"}
                               className="rounded-full p-1 text-slate-400 transition-colors hover:bg-white hover:text-brand-green-600"
                             >
                               🏷️
@@ -1672,8 +1673,9 @@ function DaySection({
                     {isEditingTitle && (
                       <EditTitleForm
                         initialTitle={stop.baseTitle}
-                        onSave={(title) => {
-                          onEditTitle(stop.noteEditable, title);
+                        initialCategory={stop.custom?.category}
+                        onSave={(title, category) => {
+                          onEditTitle(stop.noteEditable, title, category);
                           setEditingTitleId(null);
                         }}
                         onCancel={() => setEditingTitleId(null)}
