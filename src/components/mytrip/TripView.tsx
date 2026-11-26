@@ -28,6 +28,8 @@ import { PrepChecklist } from "@/components/mytrip/PrepChecklist";
 import { PlacesToVisit } from "@/components/mytrip/PlacesToVisit";
 import { PLACES_KEY, sanitizePlaces, type PlaceToVisit } from "@/lib/tripPlaces";
 import { buildDayRoute, routeStopQuery } from "@/lib/dayRoute";
+import { sanitizeDocuments, type TripDocument } from "@/lib/tripDocuments";
+import { ActivityDocuments } from "@/components/mytrip/ActivityDocuments";
 import { PREP_CHECKLIST_KEY, sanitizeChecklist, type ChecklistItem } from "@/lib/prepChecklist";
 import { TRIP_SUMMARY_KEY, sanitizeSummaryText, type TripSummaryInput, type TripSummaryText } from "@/lib/tripSummary";
 import { PhotoSearchForm } from "@/components/mytrip/PhotoSearchForm";
@@ -145,6 +147,8 @@ interface DisplayStop {
   photoCaption?: string | null;
   /** The activity's website the user linked — never itinerary data. */
   websiteUrl?: string | null;
+  /** Files the user attached (insurance PDF, tickets…) — never itinerary data. */
+  documents: TripDocument[];
   /** Matches a name in the day's weatherLocations — set only on outdoor/town stops. */
   weatherLocationName?: string;
   /** Set only on an itinerary flight — see flightLookup for how a flight is resolved for status checks. */
@@ -250,6 +254,7 @@ function staticRefToDisplay(
       photoUrl: override?.photoUrl ?? null,
       photoCaption: override?.photoCaption ?? null,
       websiteUrl: override?.websiteUrl ?? null,
+      documents: sanitizeDocuments(override?.documents),
       weatherLocationName: stop.weatherLocationName,
       flight: stop.flight,
       status: override?.status,
@@ -289,6 +294,7 @@ function customToDisplayEntries(
         photoUrl: stop.photoUrl ?? null,
         photoCaption: stop.photoCaption ?? null,
         websiteUrl: stop.websiteUrl ?? null,
+        documents: sanitizeDocuments(stop.documents),
         custom: stop,
         status: overrides[`custom-${stop.id}-start`]?.status,
         editable: { kind: "custom-start", customId: stop.id, date: stop.date, time: stop.time ?? "" },
@@ -316,6 +322,7 @@ function customToDisplayEntries(
         photoUrl: stop.photoUrl ?? null,
         photoCaption: stop.photoCaption ?? null,
         websiteUrl: stop.websiteUrl ?? null,
+        documents: sanitizeDocuments(stop.documents),
         custom: stop,
         status: overrides[`custom-${stop.id}-end`]?.status,
         editable: { kind: "custom-end", customId: stop.id, date: stop.endDate, time: stop.endTime ?? "" },
@@ -817,6 +824,27 @@ export function TripView({
     });
   }
 
+  /** The activity's attached documents (the files themselves live in private storage — see ActivityDocuments). */
+  function handleDocumentsEdit(ref: NoteRef, documents: TripDocument[]) {
+    if (ref.kind === "static") {
+      setOverrides((prev) => {
+        const next = { ...prev, [ref.id]: { ...prev[ref.id], documents } };
+        saveStopOverrides(trip.id, next);
+        overridesRef.current = next;
+        void pushToCloud(customStopsRef.current, next);
+        return next;
+      });
+    } else {
+      setCustomStops((prev) => {
+        const next = prev.map((s) => (s.id === ref.customId ? { ...s, documents } : s));
+        saveCustomStops(trip.id, next);
+        customStopsRef.current = next;
+        void pushToCloud(next, overridesRef.current);
+        return next;
+      });
+    }
+  }
+
   function handleWebsiteEdit(ref: NoteRef, websiteUrl: string | null) {
     if (ref.kind === "static") editStaticWebsite(ref.id, websiteUrl);
     else editCustomStopWebsite(ref.customId, websiteUrl);
@@ -1118,6 +1146,7 @@ export function TripView({
               onEditTitle={handleTitleEdit}
               onEditPhoto={handlePhotoEdit}
               onEditWebsite={handleWebsiteEdit}
+              onEditDocuments={handleDocumentsEdit}
               onSetStatus={setStopStatus}
             />
           ))}
@@ -1226,6 +1255,7 @@ function DaySection({
   onEditTitle,
   onEditPhoto,
   onEditWebsite,
+  onEditDocuments,
   onSetStatus,
 }: {
   day: TripDay;
@@ -1250,6 +1280,7 @@ function DaySection({
   onEditTitle: (ref: NoteRef, title: string, category?: CustomStopCategory) => void;
   onEditPhoto: (ref: NoteRef, photoUrl: string, photoCaption: string) => void;
   onEditWebsite: (ref: NoteRef, websiteUrl: string | null) => void;
+  onEditDocuments: (ref: NoteRef, documents: TripDocument[]) => void;
   onSetStatus: (stopId: string, status: ActivityStatus | null) => void;
 }) {
   const [open, setOpen] = useState(isActive);
@@ -1261,6 +1292,7 @@ function DaySection({
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
   const [editingWebsiteId, setEditingWebsiteId] = useState<string | null>(null);
+  const [documentsId, setDocumentsId] = useState<string | null>(null);
   const [checkingWeatherId, setCheckingWeatherId] = useState<string | null>(null);
   const [checkingFlightId, setCheckingFlightId] = useState<string | null>(null);
   const [editingRoute, setEditingRoute] = useState(false);
@@ -1661,6 +1693,12 @@ function DaySection({
                             🖼️ Image Search
                           </button>
                           <button
+                            onClick={() => setDocumentsId(documentsId === stop.id ? null : stop.id)}
+                            className="whitespace-nowrap rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-all hover:border-amber-300 hover:text-amber-700 active:scale-95"
+                          >
+                            📎 {stop.documents.length > 0 ? `Documents (${stop.documents.length})` : "Add Document"}
+                          </button>
+                          <button
                             onClick={() => setEditingWebsiteId(isEditingWebsite ? null : stop.id)}
                             className="whitespace-nowrap rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-all hover:border-brand-blue-300 hover:text-brand-blue-700 active:scale-95"
                           >
@@ -1704,6 +1742,15 @@ function DaySection({
                           setEditingNoteId(null);
                         }}
                         onCancel={() => setEditingNoteId(null)}
+                      />
+                    )}
+
+                    {(documentsId === stop.id || stop.documents.length > 0) && (
+                      <ActivityDocuments
+                        key={`${stop.id}-${documentsId === stop.id}`}
+                        documents={stop.documents}
+                        startOpen={documentsId === stop.id}
+                        onChange={(docs) => onEditDocuments(stop.noteEditable, docs)}
                       />
                     )}
 

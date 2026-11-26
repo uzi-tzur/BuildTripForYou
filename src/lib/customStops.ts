@@ -1,3 +1,5 @@
+import type { TripDocument } from "@/lib/tripDocuments";
+
 /**
  * User-added activities for the no-login trip companion (/my-trip).
  * Persisted in the browser's localStorage — this page has no backend,
@@ -101,6 +103,8 @@ export interface CustomStop {
   photoCaption?: string | null;
   /** The activity's own website — see normalizeWebsiteUrl in stopOverrides.ts. */
   websiteUrl?: string | null;
+  /** Files attached to the activity (insurance PDF, tickets…) — see src/lib/tripDocuments.ts. */
+  documents?: TripDocument[];
   /** Only meaningful for category "airport" — departure airport code/name, e.g. "DEN". */
   airport?: string | null;
   airline?: string | null;

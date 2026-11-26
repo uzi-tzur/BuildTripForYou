@@ -1,6 +1,7 @@
 import type { ActivityStatus } from "@/lib/activityImpact";
 import type { ChecklistItem } from "@/lib/prepChecklist";
 import type { PlaceToVisit } from "@/lib/tripPlaces";
+import type { TripDocument } from "@/lib/tripDocuments";
 import type { TripSummaryText } from "@/lib/tripSummary";
 
 /**
@@ -26,6 +27,8 @@ export interface StopOverride {
   photoCaption?: string | null;
   /** The activity's own website (tickets, menu, park page…) — opened in one tap from the activity. */
   websiteUrl?: string | null;
+  /** Files attached to the activity (insurance PDF, tickets…) — see src/lib/tripDocuments.ts. */
+  documents?: TripDocument[];
   /**
    * Only used on a day-level entry (key `day${dayIndex}`, not a stop id): a
    * Google Maps directions link the user pasted for that whole day. Stored

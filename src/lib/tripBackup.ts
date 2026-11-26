@@ -19,6 +19,7 @@ import {
 } from "@/lib/customStops";
 import { sanitizeChecklist } from "@/lib/prepChecklist";
 import { sanitizePlaces } from "@/lib/tripPlaces";
+import { sanitizeDocuments } from "@/lib/tripDocuments";
 import { isTripPhotoUrl } from "@/lib/tripPhotos";
 import { sanitizeSummaryText } from "@/lib/tripSummary";
 import { isValidGoogleMapsUrl, loadStopOverrides, normalizeWebsiteUrl, saveStopOverrides, type StopOverride } from "@/lib/stopOverrides";
@@ -217,6 +218,7 @@ function sanitizeCustomStop(value: unknown): CustomStop | null {
     photoUrl: remoteImage(value.photoUrl),
     photoCaption: text(value.photoCaption, 200),
     websiteUrl: websiteUrl(value.websiteUrl),
+    documents: sanitizeDocuments(value.documents),
     airport: text(value.airport, 100),
     airline: text(value.airline, 100),
     flightNumber: text(value.flightNumber, 20),
@@ -238,6 +240,7 @@ function sanitizeOverride(value: unknown): StopOverride | null {
   if ("photoUrl" in value) override.photoUrl = remoteImage(value.photoUrl);
   if ("photoCaption" in value) override.photoCaption = text(value.photoCaption, 200);
   if ("websiteUrl" in value) override.websiteUrl = websiteUrl(value.websiteUrl);
+  if ("documents" in value) override.documents = sanitizeDocuments(value.documents);
   if ("routeUrl" in value) {
     const url = typeof value.routeUrl === "string" && value.routeUrl.length <= 4000 && isValidGoogleMapsUrl(value.routeUrl) ? value.routeUrl : null;
     override.routeUrl = url;
