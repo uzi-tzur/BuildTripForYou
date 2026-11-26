@@ -27,6 +27,7 @@ import { EditDayRouteForm } from "@/components/mytrip/EditDayRouteForm";
 import { PrepChecklist } from "@/components/mytrip/PrepChecklist";
 import { PlacesToVisit } from "@/components/mytrip/PlacesToVisit";
 import { PLACES_KEY, sanitizePlaces, type PlaceToVisit } from "@/lib/tripPlaces";
+import { buildDayRoute } from "@/lib/dayRoute";
 import { PREP_CHECKLIST_KEY, sanitizeChecklist, type ChecklistItem } from "@/lib/prepChecklist";
 import { TRIP_SUMMARY_KEY, sanitizeSummaryText, type TripSummaryInput, type TripSummaryText } from "@/lib/tripSummary";
 import { PhotoSearchForm } from "@/components/mytrip/PhotoSearchForm";
@@ -1263,6 +1264,8 @@ function DaySection({
   const [checkingWeatherId, setCheckingWeatherId] = useState<string | null>(null);
   const [checkingFlightId, setCheckingFlightId] = useState<string | null>(null);
   const [editingRoute, setEditingRoute] = useState(false);
+  /** Used only when the user hasn't pasted their own link for the day. */
+  const autoRoute = useMemo(() => buildDayRoute(stops.filter((s) => s.status !== "skipped").map((s) => s.address)), [stops]);
   useEffect(() => {
     if (isActive) setOpen(true);
   }, [isActive]);
@@ -1337,6 +1340,24 @@ function DaySection({
               🗑️
             </button>
           </>
+        ) : autoRoute ? (
+          <>
+            <a
+              href={autoRoute.url}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="whitespace-nowrap rounded-full bg-brand-blue-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-brand-blue-600 active:scale-95"
+            >
+              🗺️ Open the day&apos;s route in Google Maps · {autoRoute.stopCount} stops
+            </a>
+            <button
+              onClick={() => setEditingRoute((v) => !v)}
+              aria-label="Use your own Google Maps link for this day instead"
+              className="rounded-full p-1.5 text-xs text-slate-400 transition-colors hover:bg-slate-100 hover:text-brand-blue-600"
+            >
+              ✏️
+            </button>
+          </>
         ) : (
           <button
             onClick={() => setEditingRoute((v) => !v)}
@@ -1346,6 +1367,12 @@ function DaySection({
           </button>
         )}
       </div>
+      {!routeUrl && autoRoute && (
+        <p className="-mt-2 px-4 pb-3 text-[11px] text-slate-400">
+          Built from this day&apos;s activity addresses, in time order (skipped ones left out)
+          {autoRoute.omittedCount > 0 ? ` — Google Maps takes ${autoRoute.stopCount} stops, so the last ${autoRoute.omittedCount} aren't included` : ""}.
+        </p>
+      )}
 
       {editingRoute && (
         <EditDayRouteForm
