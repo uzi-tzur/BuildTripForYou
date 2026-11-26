@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTripDays, type TripMeta } from "@/lib/trips";
-import { isWithinForecastWindow, toWeatherPlace } from "@/lib/weatherPlace";
+import { decodeTripWeather, encodeTripWeather, isWithinForecastWindow, toWeatherPlace } from "@/lib/weatherPlace";
 
 const TOKYO = { name: "Tokyo, JP", latitude: 35.68, longitude: 139.76 };
 
@@ -24,6 +24,27 @@ describe("trip weather location", () => {
     const days = getTripDays({ ...blankTrip, weatherLocation: TOKYO });
     expect(days).toHaveLength(3);
     expect(days.every((d) => d.weatherLocations[0]?.name === "Tokyo, JP")).toBe(true);
+  });
+
+  it("lets single days of a round trip show their own place", () => {
+    const KYOTO = { name: "Kyoto, JP", latitude: 35.01, longitude: 135.77 };
+    const days = getTripDays({ ...blankTrip, weatherLocation: TOKYO, dayWeatherLocations: { "2": KYOTO } });
+    expect(days.map((d) => d.weatherLocations[0]?.name)).toEqual(["Tokyo, JP", "Kyoto, JP", "Tokyo, JP"]);
+    // A day place works even before a trip-wide one is chosen.
+    expect(getTripDays({ ...blankTrip, dayWeatherLocations: { "3": KYOTO } }).map((d) => d.weatherLocations.length)).toEqual([0, 0, 1]);
+  });
+
+  it("stores trip and day places in the cloud column, and still reads the older plain-place format", () => {
+    const KYOTO = { name: "Kyoto, JP", latitude: 35.01, longitude: 135.77 };
+    expect(encodeTripWeather(TOKYO, {})).toEqual(TOKYO);
+    expect(decodeTripWeather(TOKYO)).toEqual({ weatherLocation: TOKYO, dayWeatherLocations: {} });
+    const both = encodeTripWeather(TOKYO, { "2": KYOTO });
+    expect(decodeTripWeather(both)).toEqual({ weatherLocation: TOKYO, dayWeatherLocations: { "2": KYOTO } });
+    expect(decodeTripWeather({ trip: null, days: { "2": KYOTO, x: KYOTO, "3": { name: "" } } })).toEqual({
+      weatherLocation: null,
+      dayWeatherLocations: { "2": KYOTO },
+    });
+    expect(decodeTripWeather(null)).toEqual({ weatherLocation: null, dayWeatherLocations: {} });
   });
 
   it("accepts only well-formed places", () => {

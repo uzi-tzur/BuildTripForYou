@@ -10,7 +10,7 @@ import { COLORADO_TRIP_DAYS, TRIP_META, type TripDay } from "@/data/coloradoTrip
 import { deviceTripTimeZone, tripTimeZoneFields } from "@/lib/timeZones";
 import { loadCustomStops, saveCustomStops } from "@/lib/customStops";
 import { loadStopOverrides, saveStopOverrides } from "@/lib/stopOverrides";
-import type { WeatherPlace } from "@/lib/weatherPlace";
+import type { DayWeatherPlaces, WeatherPlace } from "@/lib/weatherPlace";
 
 export interface TripMeta {
   id: string;
@@ -31,6 +31,8 @@ export interface TripMeta {
    * per-day weather stops. Absent/null means "not chosen yet".
    */
   weatherLocation?: WeatherPlace | null;
+  /** Days that show a different place than weatherLocation (a round trip), keyed by day number "1", "2", … */
+  dayWeatherLocations?: DayWeatherPlaces;
   isSeed: boolean;
   createdAt: string;
   /**
@@ -223,6 +225,7 @@ export function updateTrip(
     timezoneOffset?: string;
     timezoneLabel?: string;
     weatherLocation?: WeatherPlace | null;
+    dayWeatherLocations?: DayWeatherPlaces;
   },
 ): TripMeta {
   const current = loadAllTrips().find((t) => t.id === id);
@@ -316,8 +319,10 @@ export function getTripDays(trip: TripMeta): TripDay[] {
     return delta === 0 ? COLORADO_TRIP_DAYS : shiftTripDays(COLORADO_TRIP_DAYS, delta);
   }
   const days = generateBlankTripDays(trip.startDate, trip.endDate);
-  const place = trip.weatherLocation;
-  return place ? days.map((d) => ({ ...d, weatherLocations: [{ ...place }] })) : days;
+  return days.map((d, i) => {
+    const place = trip.dayWeatherLocations?.[String(i + 1)] ?? trip.weatherLocation;
+    return place ? { ...d, weatherLocations: [{ ...place }] } : d;
+  });
 }
 
 function generateBlankTripDays(startDate: string, endDate: string): TripDay[] {

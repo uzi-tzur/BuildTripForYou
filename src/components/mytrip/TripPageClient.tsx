@@ -71,6 +71,24 @@ export function TripPageClient({ tripId }: { tripId: string }) {
     });
   }
 
+  /** A round trip: one day shows its own place (null = back to the trip-wide one). */
+  function handleChangeDayWeatherLocation(dayNumber: number, place: WeatherPlace | null) {
+    if (!trip) return;
+    const dayWeatherLocations = { ...(trip.dayWeatherLocations ?? {}) };
+    if (place) dayWeatherLocations[String(dayNumber)] = place;
+    else delete dayWeatherLocations[String(dayNumber)];
+    const updated = updateTrip(trip.id, { dayWeatherLocations });
+    setTrip(updated);
+    const tripDays = getTripDays(updated);
+    setDays(tripDays);
+    refreshWeather(tripDays, updated.timezoneOffset).catch(() => {
+      // Weather is a nice-to-have — the place is saved either way.
+    });
+    void pushTripToCloud(updated, getOrCreateSyncCode()).then((ok) => {
+      if (ok) markTripSynced(updated.id);
+    });
+  }
+
   function handleChangeTimeZone(timezoneOffset: string, timezoneLabel: string) {
     if (!trip) return;
     const updated = updateTrip(trip.id, { timezoneOffset, timezoneLabel });
@@ -110,6 +128,7 @@ export function TripPageClient({ tripId }: { tripId: string }) {
       onChangePhoto={handleChangePhoto}
       onChangeTimeZone={handleChangeTimeZone}
       onChangeWeatherLocation={handleChangeWeatherLocation}
+      onChangeDayWeatherLocation={handleChangeDayWeatherLocation}
     />
   );
 }

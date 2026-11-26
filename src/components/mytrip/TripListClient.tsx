@@ -100,11 +100,13 @@ export function TripListClient() {
     // A cloud row with no weather location (database not migrated yet, or
     // that save didn't reach it) must not wipe the one chosen on this device.
     const localById = new Map(localTrips.map((t) => [t.id, t]));
-    const cloudWithLocal = cloudTrips.map((t) =>
-      !t.weatherLocation && localById.get(t.id)?.weatherLocation
-        ? { ...t, weatherLocation: localById.get(t.id)?.weatherLocation }
-        : t,
-    );
+    const hasWeather = (t?: TripMeta) => Boolean(t?.weatherLocation || Object.keys(t?.dayWeatherLocations ?? {}).length);
+    const cloudWithLocal = cloudTrips.map((t) => {
+      const local = localById.get(t.id);
+      return !hasWeather(t) && hasWeather(local)
+        ? { ...t, weatherLocation: local?.weatherLocation ?? null, dayWeatherLocations: local?.dayWeatherLocations ?? {} }
+        : t;
+    });
     const merged = [...cloudWithLocal, ...newLocalTrips];
     replaceUserTrips(merged);
     setTrips(withSeedTrip(merged));

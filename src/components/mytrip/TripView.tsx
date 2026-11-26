@@ -13,7 +13,7 @@ import { ItineraryExport } from "@/components/mytrip/ItineraryExport";
 import { TripSummary } from "@/components/mytrip/TripSummary";
 import { DelaySuggestion } from "@/components/mytrip/DelaySuggestion";
 import { TripTimeZoneRow } from "@/components/mytrip/TripTimeZoneRow";
-import { WeatherLocationRow } from "@/components/mytrip/WeatherLocationRow";
+import { DayWeatherControl, WeatherLocationRow } from "@/components/mytrip/WeatherLocationRow";
 import type { WeatherPlace } from "@/lib/weatherPlace";
 import { FlightDelayBanner } from "@/components/mytrip/FlightDelayBanner";
 import { laterOnSameDayMinutes, proposeFollowingShift, type ActivityStatus } from "@/lib/activityImpact";
@@ -493,6 +493,7 @@ export function TripView({
   onChangePhoto,
   onChangeTimeZone,
   onChangeWeatherLocation,
+  onChangeDayWeatherLocation,
 }: {
   trip: TripMeta;
   days: TripDay[];
@@ -503,6 +504,8 @@ export function TripView({
   onChangePhoto: (heroImage: string, heroCaption: string) => void;
   onChangeTimeZone: (timezoneOffset: string, timezoneLabel: string) => void;
   onChangeWeatherLocation: (place: WeatherPlace) => void;
+  /** dayNumber is 1-based; null puts the day back on the trip-wide place. */
+  onChangeDayWeatherLocation: (dayNumber: number, place: WeatherPlace | null) => void;
 }) {
   const now = useNow();
   const [changingCover, setChangingCover] = useState(false);
@@ -993,7 +996,7 @@ export function TripView({
             onChange={onChangeWeatherLocation}
           />
         )}
-        {(trip.sourceContent === "colorado-seed" || trip.weatherLocation) && (
+        {(trip.sourceContent === "colorado-seed" || trip.weatherLocation || Object.keys(trip.dayWeatherLocations ?? {}).length > 0) && (
           <WeatherSyncRow updatedAt={weatherUpdatedAt} onRefresh={onRefreshWeather} />
         )}
         <TripTimeZoneRow
@@ -1078,6 +1081,15 @@ export function TripView({
                 weather: weatherByKey[weatherKey(day.date, loc.name)] ?? null,
               }))}
               usingMockWeather={usingMockWeather}
+              weatherControl={
+                trip.sourceContent === "colorado-seed" ? null : (
+                  <DayWeatherControl
+                    dayPlace={trip.dayWeatherLocations?.[String(dayIndex + 1)] ?? null}
+                    tripPlace={trip.weatherLocation ?? null}
+                    onChange={(place) => onChangeDayWeatherLocation(dayIndex + 1, place)}
+                  />
+                )
+              }
               tripStartDate={trip.startDate}
               tripEndDate={trip.endDate}
               timezoneLabel={trip.timezoneLabel}
@@ -1182,6 +1194,7 @@ function DaySection({
   focusRequest,
   weatherEntries,
   usingMockWeather,
+  weatherControl,
   tripStartDate,
   tripEndDate,
   timezoneLabel,
@@ -1207,6 +1220,8 @@ function DaySection({
   focusRequest: { stopId: string; n: number } | null;
   weatherEntries: { name: string; weather: WeatherCondition | null }[];
   usingMockWeather: boolean;
+  /** "📍 Change this day's weather place" — only on trips built from "+ Add activity". */
+  weatherControl: React.ReactNode;
   tripStartDate: string;
   tripEndDate: string;
   timezoneLabel: string;
@@ -1277,6 +1292,7 @@ function DaySection({
           ))}
         </div>
       )}
+      {weatherControl}
 
       <div className={`flex flex-wrap items-center gap-1.5 px-4 pb-4 ${weatherEntries.length > 0 ? "" : "-mt-2"}`}>
         {routeUrl ? (
