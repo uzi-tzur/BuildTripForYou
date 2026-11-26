@@ -1,14 +1,17 @@
 name: Supabase keep-alive
 
 # Free-tier Supabase projects are paused after ~7 days without activity.
-# This runs one read-only query every 3 days so the project stays active.
+# This runs one read-only query every day so the project stays active, with
+# a wide margin for GitHub's delayed or skipped scheduled runs.
 # It only SELECTs a single id from the public `destinations` table (anon
 # key, RLS-allowed read) — nothing is written.
+#
+# If this job fails, the project is most likely already paused: restore it at
+# https://supabase.com/dashboard (open the project → "Restore project").
 
 on:
   schedule:
-    # 06:00 UTC on days 1, 4, 7, ... of every month (gap is never > 3 days).
-    - cron: "0 6 */3 * *"
+    - cron: "0 6 * * *"
   workflow_dispatch:
 
 jobs:
@@ -24,9 +27,21 @@ jobs:
             echo "::error::SUPABASE_URL / SUPABASE_ANON_KEY repository secrets are not set"
             exit 1
           fi
+          # Don't let `bash -e` stop on a curl error before we can explain it.
+          set +e
           status=$(curl -s -o /dev/null -w "%{http_code}" \
+            --retry 3 --retry-delay 10 --retry-all-errors --max-time 30 \
             "$SUPABASE_URL/rest/v1/destinations?select=id&limit=1" \
             -H "apikey: $SUPABASE_ANON_KEY" \
             -H "Authorization: Bearer $SUPABASE_ANON_KEY")
-          echo "Supabase responded with HTTP $status"
-          [ "$status" = "200" ]
+          curl_exit=$?
+          set -e
+          echo "Supabase responded with HTTP $status (curl exit code $curl_exit)"
+          if [ "$curl_exit" = "6" ]; then
+            echo "::error::Could not resolve the Supabase host. The project is probably paused — restore it in the Supabase dashboard."
+            exit 1
+          fi
+          if [ "$status" != "200" ]; then
+            echo "::error::Supabase did not answer the query (HTTP $status). If it's 5xx, the project is probably paused or down — check the Supabase dashboard."
+            exit 1
+          fi

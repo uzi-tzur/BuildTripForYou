@@ -74,6 +74,19 @@ describe("POST /api/photo-upload", () => {
     expect(res.status).toBe(502);
     expect(await res.json()).toMatchObject({ ok: false, error: { code: "upload_failed" } });
   });
+
+  it("says storage is offline when Supabase can't be reached or its database is down", async () => {
+    for (const error of [
+      { message: "fetch failed" },
+      { message: "The connection to the database timed out", statusCode: "544" },
+      { message: "Internal error", status: 500 },
+    ]) {
+      upload.mockResolvedValue({ error });
+      const res = await send(JPEG);
+      expect(res.status).toBe(503);
+      expect(await res.json()).toMatchObject({ ok: false, error: { code: "storage_unavailable" } });
+    }
+  });
 });
 
 describe("trip photo helpers", () => {

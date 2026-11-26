@@ -25,6 +25,16 @@ function describeKey(key: string): string {
   return `${kind}, ${key.length} chars`;
 }
 
+/**
+ * True when Storage couldn't be reached or its database is down (a paused
+ * free-tier project answers with "fetch failed", 5xx or "timed out") — as
+ * opposed to it refusing this particular file.
+ */
+function isStorageUnavailable(error: { message: string; status?: unknown; statusCode?: unknown }): boolean {
+  const status = Number(error.status ?? error.statusCode);
+  return status >= 500 || /fetch failed|timed out|timeout|ECONNREFUSED|ENOTFOUND/i.test(error.message);
+}
+
 function fail(code: PhotoUploadErrorCode, message: string, status: number) {
   const body: PhotoUploadApiResponse = { ok: false, error: { code, message } };
   return NextResponse.json(body, { status });
@@ -61,6 +71,9 @@ export async function POST(request: Request) {
   const { error } = await storage.upload(path, bytes, { contentType: type.mime, upsert: false });
   if (error) {
     console.error(`photo-upload: Supabase Storage upload failed: ${error.message} [SUPABASE_SERVICE_ROLE_KEY: ${describeKey(serviceKey)}]`);
+    if (isStorageUnavailable(error)) {
+      return fail("storage_unavailable", "Photo storage is offline right now, so the photo couldn't be saved. Try again later.", 503);
+    }
     return fail("upload_failed", "The photo couldn't be saved — try again.", 502);
   }
 

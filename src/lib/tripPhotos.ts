@@ -8,7 +8,7 @@ export const TRIP_PHOTOS_BUCKET = "trip-photos";
 /** Photos are shrunk on the phone before upload, so this is generous — and under Vercel's 4.5 MB request limit. */
 export const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
 
-export type PhotoUploadErrorCode = "invalid_request" | "too_large" | "unsupported_type" | "not_configured" | "upload_failed";
+export type PhotoUploadErrorCode = "invalid_request" | "too_large" | "unsupported_type" | "not_configured" | "storage_unavailable" | "upload_failed";
 
 export type PhotoUploadApiResponse =
   | { ok: true; url: string }
