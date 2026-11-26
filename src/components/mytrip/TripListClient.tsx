@@ -97,7 +97,15 @@ export function TripListClient() {
       });
     }
 
-    const merged = [...cloudTrips, ...newLocalTrips];
+    // A cloud row with no weather location (database not migrated yet, or
+    // that save didn't reach it) must not wipe the one chosen on this device.
+    const localById = new Map(localTrips.map((t) => [t.id, t]));
+    const cloudWithLocal = cloudTrips.map((t) =>
+      !t.weatherLocation && localById.get(t.id)?.weatherLocation
+        ? { ...t, weatherLocation: localById.get(t.id)?.weatherLocation }
+        : t,
+    );
+    const merged = [...cloudWithLocal, ...newLocalTrips];
     replaceUserTrips(merged);
     setTrips(withSeedTrip(merged));
     setSyncStatus("synced");

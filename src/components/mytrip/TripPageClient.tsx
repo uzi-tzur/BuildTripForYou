@@ -8,6 +8,7 @@ import { getOrCreateSyncCode } from "@/lib/syncCode";
 import { pushTripToCloud } from "@/lib/tripListSync";
 import { getTripDays, loadAllTrips, markTripSynced, updateTrip, type TripMeta } from "@/lib/trips";
 import type { WeatherCondition } from "@/lib/types";
+import type { WeatherPlace } from "@/lib/weatherPlace";
 
 export function TripPageClient({ tripId }: { tripId: string }) {
   const [trip, setTrip] = useState<TripMeta | null | undefined>(undefined); // undefined = loading
@@ -16,14 +17,14 @@ export function TripPageClient({ tripId }: { tripId: string }) {
   const [usingMockWeather, setUsingMockWeather] = useState(true);
   const [weatherUpdatedAt, setWeatherUpdatedAt] = useState<string | null>(null);
 
-  const refreshWeather = useCallback(async (tripDays: TripDay[]) => {
+  const refreshWeather = useCallback(async (tripDays: TripDay[], timezoneOffset: string) => {
     const locations = tripDays.flatMap((d) => d.weatherLocations.map((loc) => ({ date: d.date, ...loc })));
     if (locations.length === 0) return;
 
     const res = await fetch("/api/mytrip-weather", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ locations }),
+      body: JSON.stringify({ locations, timezoneOffset }),
     });
     const body = await res.json();
     setWeatherByKey(body.weatherByKey ?? {});
@@ -39,7 +40,7 @@ export function TripPageClient({ tripId }: { tripId: string }) {
     const tripDays = getTripDays(found);
     setDays(tripDays);
 
-    refreshWeather(tripDays).catch(() => {
+    refreshWeather(tripDays, found.timezoneOffset).catch(() => {
       // Weather is a nice-to-have here — the trip still renders without it.
     });
   }, [tripId, refreshWeather]);
@@ -49,6 +50,22 @@ export function TripPageClient({ tripId }: { tripId: string }) {
     if (!trip) return;
     const updated = updateTrip(trip.id, { heroImage, heroCaption: heroCaption || null });
     setTrip(updated);
+    void pushTripToCloud(updated, getOrCreateSyncCode()).then((ok) => {
+      if (ok) markTripSynced(updated.id);
+    });
+  }
+
+  /** Saves the place, fills every day with it and loads its forecast right away. */
+  function handleChangeWeatherLocation(weatherLocation: WeatherPlace) {
+    if (!trip) return;
+    const updated = updateTrip(trip.id, { weatherLocation });
+    setTrip(updated);
+    const tripDays = getTripDays(updated);
+    setDays(tripDays);
+    setWeatherByKey({});
+    refreshWeather(tripDays, updated.timezoneOffset).catch(() => {
+      // Weather is a nice-to-have — the location is saved either way.
+    });
     void pushTripToCloud(updated, getOrCreateSyncCode()).then((ok) => {
       if (ok) markTripSynced(updated.id);
     });
@@ -89,9 +106,10 @@ export function TripPageClient({ tripId }: { tripId: string }) {
       weatherByKey={weatherByKey}
       usingMockWeather={usingMockWeather}
       weatherUpdatedAt={weatherUpdatedAt}
-      onRefreshWeather={() => refreshWeather(days)}
+      onRefreshWeather={() => refreshWeather(days, trip.timezoneOffset)}
       onChangePhoto={handleChangePhoto}
       onChangeTimeZone={handleChangeTimeZone}
+      onChangeWeatherLocation={handleChangeWeatherLocation}
     />
   );
 }

@@ -257,6 +257,8 @@ export interface Database {
           created_at: string;
           source_content: string | null;
           hidden: boolean;
+          /** Added by migration 0013 — missing on a database where it hasn't been run. */
+          weather_location?: unknown;
         };
         Insert: Partial<Database["public"]["Tables"]["mytrip_trip_list"]["Row"]> & {
           id: string;
@@ -302,6 +304,10 @@ export interface Database {
       };
       delete_family_trip: {
         Args: { p_id: string };
+        Returns: void;
+      };
+      save_family_trip_weather: {
+        Args: { p_id: string; p_sync_code: string; p_weather_location: unknown };
         Returns: void;
       };
     };

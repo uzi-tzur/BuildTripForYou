@@ -10,6 +10,7 @@
  */
 import { getMytripSupabaseClient, isMytripSupabaseConfigured } from "@/lib/mytripSupabase";
 import type { TripMeta } from "@/lib/trips";
+import { toWeatherPlace } from "@/lib/weatherPlace";
 
 export function cloudTripListAvailable(): boolean {
   return isMytripSupabaseConfigured();
@@ -39,6 +40,9 @@ export async function pullFamilyTrips(syncCode: string): Promise<PullFamilyTrips
         createdAt: row.created_at,
         sourceContent: row.source_content === "colorado-seed" ? "colorado-seed" : undefined,
         hidden: Boolean(row.hidden),
+        // Left undefined (not null) when the database has no such column yet
+        // (migration 0013 not run), so the caller keeps this device's value.
+        ...("weather_location" in row ? { weatherLocation: toWeatherPlace(row.weather_location) } : {}),
       })),
     };
   } catch {
@@ -73,7 +77,17 @@ export async function pushTripToCloud(trip: TripMeta, syncCode: string): Promise
       p_source_content: trip.sourceContent ?? null,
       p_hidden: trip.hidden ?? false,
     });
-    return !error;
+    if (error) return false;
+    if (trip.weatherLocation !== undefined) {
+      // Its own call so a database without migration 0013 still syncs the
+      // rest of the trip — the weather location then just stays local.
+      await supabase.rpc("save_family_trip_weather", {
+        p_id: trip.id,
+        p_sync_code: syncCode,
+        p_weather_location: trip.weatherLocation,
+      });
+    }
+    return true;
   } catch {
     return false;
   }

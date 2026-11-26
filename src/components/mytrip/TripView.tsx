@@ -13,6 +13,8 @@ import { ItineraryExport } from "@/components/mytrip/ItineraryExport";
 import { TripSummary } from "@/components/mytrip/TripSummary";
 import { DelaySuggestion } from "@/components/mytrip/DelaySuggestion";
 import { TripTimeZoneRow } from "@/components/mytrip/TripTimeZoneRow";
+import { WeatherLocationRow } from "@/components/mytrip/WeatherLocationRow";
+import type { WeatherPlace } from "@/lib/weatherPlace";
 import { FlightDelayBanner } from "@/components/mytrip/FlightDelayBanner";
 import { laterOnSameDayMinutes, proposeFollowingShift, type ActivityStatus } from "@/lib/activityImpact";
 import { FlightStatusPanel } from "@/components/mytrip/FlightStatusPanel";
@@ -490,6 +492,7 @@ export function TripView({
   onRefreshWeather,
   onChangePhoto,
   onChangeTimeZone,
+  onChangeWeatherLocation,
 }: {
   trip: TripMeta;
   days: TripDay[];
@@ -499,6 +502,7 @@ export function TripView({
   onRefreshWeather: () => Promise<void>;
   onChangePhoto: (heroImage: string, heroCaption: string) => void;
   onChangeTimeZone: (timezoneOffset: string, timezoneLabel: string) => void;
+  onChangeWeatherLocation: (place: WeatherPlace) => void;
 }) {
   const now = useNow();
   const [changingCover, setChangingCover] = useState(false);
@@ -982,7 +986,16 @@ export function TripView({
           />
         )}
         <SyncIndicator status={syncStatus} lastSyncedAt={lastSyncedAt} onSync={() => void manualSync()} />
-        <WeatherSyncRow updatedAt={weatherUpdatedAt} onRefresh={onRefreshWeather} />
+        {trip.sourceContent !== "colorado-seed" && (
+          <WeatherLocationRow
+            place={trip.weatherLocation ?? null}
+            suggestedQuery={trip.heroCaption || trip.name}
+            onChange={onChangeWeatherLocation}
+          />
+        )}
+        {(trip.sourceContent === "colorado-seed" || trip.weatherLocation) && (
+          <WeatherSyncRow updatedAt={weatherUpdatedAt} onRefresh={onRefreshWeather} />
+        )}
         <TripTimeZoneRow
           timezoneLabel={trip.timezoneLabel}
           timezoneOffset={trip.timezoneOffset}
