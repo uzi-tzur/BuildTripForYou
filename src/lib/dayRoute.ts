@@ -20,6 +20,20 @@ export interface DayRoute {
   omittedCount: number;
 }
 
+/**
+ * Where Google Maps should look for a stop: its address, or — when the user
+ * only typed a name ("Grandfather Mountain hike") — that name in the day's
+ * area (its weather place, e.g. "Boone, North Carolina, US"), so a name-only
+ * activity still lands on the map.
+ */
+export function routeStopQuery(stop: { address?: string | null; name: string }, area: string | null | undefined): string | null {
+  const address = stop.address?.trim();
+  if (address) return address;
+  const name = stop.name.trim();
+  if (!name) return null;
+  return area?.trim() ? `${name}, ${area.trim()}` : name;
+}
+
 /** The route through `addresses` (already in visiting order), or null when there are fewer than two distinct places. */
 export function buildDayRoute(addresses: (string | null | undefined)[]): DayRoute | null {
   const places: string[] = [];

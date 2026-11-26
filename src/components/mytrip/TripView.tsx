@@ -27,7 +27,7 @@ import { EditDayRouteForm } from "@/components/mytrip/EditDayRouteForm";
 import { PrepChecklist } from "@/components/mytrip/PrepChecklist";
 import { PlacesToVisit } from "@/components/mytrip/PlacesToVisit";
 import { PLACES_KEY, sanitizePlaces, type PlaceToVisit } from "@/lib/tripPlaces";
-import { buildDayRoute } from "@/lib/dayRoute";
+import { buildDayRoute, routeStopQuery } from "@/lib/dayRoute";
 import { PREP_CHECKLIST_KEY, sanitizeChecklist, type ChecklistItem } from "@/lib/prepChecklist";
 import { TRIP_SUMMARY_KEY, sanitizeSummaryText, type TripSummaryInput, type TripSummaryText } from "@/lib/tripSummary";
 import { PhotoSearchForm } from "@/components/mytrip/PhotoSearchForm";
@@ -1265,7 +1265,13 @@ function DaySection({
   const [checkingFlightId, setCheckingFlightId] = useState<string | null>(null);
   const [editingRoute, setEditingRoute] = useState(false);
   /** Used only when the user hasn't pasted their own link for the day. */
-  const autoRoute = useMemo(() => buildDayRoute(stops.filter((s) => s.status !== "skipped").map((s) => s.address)), [stops]);
+  const routeArea = day.weatherLocations[0]?.name ?? null;
+  const routeStops = useMemo(() => stops.filter((s) => s.status !== "skipped"), [stops]);
+  const autoRoute = useMemo(
+    () => buildDayRoute(routeStops.map((s) => routeStopQuery({ address: s.address, name: s.baseTitle }, routeArea))),
+    [routeStops, routeArea],
+  );
+  const routeUsesNames = routeStops.some((s) => !s.address?.trim());
   useEffect(() => {
     if (isActive) setOpen(true);
   }, [isActive]);
@@ -1369,9 +1375,13 @@ function DaySection({
       </div>
       {!routeUrl && autoRoute && (
         <p className="-mt-2 px-4 pb-3 text-[11px] text-slate-400">
-          Built from this day&apos;s activity addresses, in time order (skipped ones left out)
-          {autoRoute.omittedCount > 0 ? ` — Google Maps takes ${autoRoute.stopCount} stops, so the last ${autoRoute.omittedCount} aren't included` : ""}.
+          Built from this day&apos;s activities in time order (skipped ones left out)
+          {routeUsesNames ? `. Ones without an address are looked up by name${routeArea ? ` near ${routeArea}` : ""} — add an address if Maps picks the wrong place` : ""}
+          {autoRoute.omittedCount > 0 ? `. Google Maps takes ${autoRoute.stopCount} stops, so the last ${autoRoute.omittedCount} aren't included` : ""}.
         </p>
+      )}
+      {!routeUrl && !autoRoute && routeStops.length === 1 && (
+        <p className="-mt-2 px-4 pb-3 text-[11px] text-slate-400">Add a second activity to get this day&apos;s route in Google Maps.</p>
       )}
 
       {editingRoute && (

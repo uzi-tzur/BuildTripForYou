@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { buildDayRoute, MAX_ROUTE_STOPS } from "@/lib/dayRoute";
+import { buildDayRoute, MAX_ROUTE_STOPS, routeStopQuery } from "@/lib/dayRoute";
 import { isValidGoogleMapsUrl } from "@/lib/stopOverrides";
+
+describe("routeStopQuery", () => {
+  it("uses the address, or else the activity's name in the day's area", () => {
+    expect(routeStopQuery({ address: "1 Main St, Boone, NC", name: "Lunch" }, "Boone, North Carolina, US")).toBe("1 Main St, Boone, NC");
+    expect(routeStopQuery({ address: null, name: "Grandfather Mountain" }, "Boone, North Carolina, US")).toBe(
+      "Grandfather Mountain, Boone, North Carolina, US",
+    );
+    expect(routeStopQuery({ address: "  ", name: "Linville Falls" }, null)).toBe("Linville Falls");
+    expect(routeStopQuery({ address: null, name: " " }, "Boone")).toBeNull();
+  });
+});
 
 describe("buildDayRoute", () => {
   it("routes from the first to the last address through the ones between, in order", () => {
