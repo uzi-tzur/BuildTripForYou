@@ -25,6 +25,8 @@ import { rainWindowLabel } from "@/lib/weatherLabels";
 import { buildFlight, flightLabel, flightRoute, type Flight } from "@/lib/flights";
 import { EditDayRouteForm } from "@/components/mytrip/EditDayRouteForm";
 import { PrepChecklist } from "@/components/mytrip/PrepChecklist";
+import { PlacesToVisit } from "@/components/mytrip/PlacesToVisit";
+import { PLACES_KEY, sanitizePlaces, type PlaceToVisit } from "@/lib/tripPlaces";
 import { PREP_CHECKLIST_KEY, sanitizeChecklist, type ChecklistItem } from "@/lib/prepChecklist";
 import { TRIP_SUMMARY_KEY, sanitizeSummaryText, type TripSummaryInput, type TripSummaryText } from "@/lib/tripSummary";
 import { PhotoSearchForm } from "@/components/mytrip/PhotoSearchForm";
@@ -748,6 +750,17 @@ export function TripView({
     });
   }
 
+  /** The trip's "Places to visit" list, kept in the overrides like the checklist so it syncs and backs up. */
+  function editPlaces(places: PlaceToVisit[]) {
+    setOverrides((prev) => {
+      const next = { ...prev, [PLACES_KEY]: { ...prev[PLACES_KEY], places } };
+      saveStopOverrides(trip.id, next);
+      overridesRef.current = next;
+      void pushToCloud(customStopsRef.current, next);
+      return next;
+    });
+  }
+
   /** The trip summary's infographic (uploaded image and/or the text of the drawn one), kept in the overrides like the checklist. */
   function editSummary(changes: { infographicUrl?: string | null; summaryText?: TripSummaryText }) {
     setOverrides((prev) => {
@@ -989,6 +1002,7 @@ export function TripView({
             onCancel={() => setChangingCover(false)}
           />
         )}
+        <PlacesToVisit places={sanitizePlaces(overrides[PLACES_KEY]?.places)} onChange={editPlaces} />
         <SyncIndicator status={syncStatus} lastSyncedAt={lastSyncedAt} onSync={() => void manualSync()} />
         {trip.sourceContent !== "colorado-seed" && (
           <WeatherLocationRow

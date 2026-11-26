@@ -18,6 +18,7 @@ import {
   type CustomStopCategory,
 } from "@/lib/customStops";
 import { sanitizeChecklist } from "@/lib/prepChecklist";
+import { sanitizePlaces } from "@/lib/tripPlaces";
 import { isTripPhotoUrl } from "@/lib/tripPhotos";
 import { sanitizeSummaryText } from "@/lib/tripSummary";
 import { isValidGoogleMapsUrl, loadStopOverrides, normalizeWebsiteUrl, saveStopOverrides, type StopOverride } from "@/lib/stopOverrides";
@@ -242,6 +243,7 @@ function sanitizeOverride(value: unknown): StopOverride | null {
     override.routeUrl = url;
   }
   if ("checklist" in value) override.checklist = sanitizeChecklist(value.checklist);
+  if ("places" in value) override.places = sanitizePlaces(value.places);
   if ("infographicUrl" in value) override.infographicUrl = remoteImage(value.infographicUrl);
   if ("summaryText" in value) override.summaryText = sanitizeSummaryText(value.summaryText);
   if (value.status === "done" || value.status === "skipped") override.status = value.status;

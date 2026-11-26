@@ -1,5 +1,6 @@
 import type { ActivityStatus } from "@/lib/activityImpact";
 import type { ChecklistItem } from "@/lib/prepChecklist";
+import type { PlaceToVisit } from "@/lib/tripPlaces";
 import type { TripSummaryText } from "@/lib/tripSummary";
 
 /**
@@ -35,6 +36,8 @@ export interface StopOverride {
   status?: ActivityStatus;
   /** Only used on the trip-level entry (key PREP_CHECKLIST_KEY): the user's packing & prep checklist. */
   checklist?: ChecklistItem[];
+  /** Only used on the trip-level entry (key PLACES_KEY): the places this trip should cover, in order. */
+  places?: PlaceToVisit[];
   /** Only used on the trip-level entry (key TRIP_SUMMARY_KEY): an infographic image the user uploaded for the trip summary. */
   infographicUrl?: string | null;
   /** Only used on the trip-level entry (key TRIP_SUMMARY_KEY): the text of the infographic the app draws. */
